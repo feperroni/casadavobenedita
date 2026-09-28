@@ -39,25 +39,31 @@ class StatusPagamentoEnum(str, enum.Enum):
 class FuncaoOperacionalEnum(str, enum.Enum):
     """Posições de apoio da gira, preenchidas por rodízio.
 
-    A Limpeza 2 é feita por duas pessoas, então ocupa duas posições. O nome
-    ``LIMPEZA_2`` fica como está de propósito: é ele que está gravado nas
-    colunas Enum do banco, e renomeá-lo obrigaria a migrar todas as giras e
-    aptidões já registradas. Só o rótulo mudou.
+    Limpeza - Antes da Gira e Limpeza - Depois da Gira admitem mais de uma
+    pessoa cada, então ocupam várias posições. Os nomes ``LIMPEZA_1`` e
+    ``LIMPEZA_2`` ficam como estão de propósito: são eles que estão gravados
+    nas colunas Enum do banco (giras e aptidões já registradas), e
+    renomeá-los obrigaria a migrar tudo. Só o rótulo mudou.
     """
 
     PORTEIRA_ATENDIMENTO = "Porteira de Atendimento"
     PORTEIRA_SENHA = "Porteira de Senha"
-    LIMPEZA_1 = "Limpeza 1"
-    LIMPEZA_2 = "Limpeza 2 - Pessoa 1"
-    LIMPEZA_2_PESSOA_2 = "Limpeza 2 - Pessoa 2"
+    LIMPEZA_1 = "Limpeza - Antes da Gira - Pessoa 1"
+    LIMPEZA_1_PESSOA_2 = "Limpeza - Antes da Gira - Pessoa 2"
+    LIMPEZA_2 = "Limpeza - Depois da Gira - Pessoa 1"
+    LIMPEZA_2_PESSOA_2 = "Limpeza - Depois da Gira - Pessoa 2"
+    LIMPEZA_2_PESSOA_3 = "Limpeza - Depois da Gira - Pessoa 3"
 
 
-# As duas posições da Limpeza 2 são o mesmo trabalho e valem uma aptidão só:
-# quem pode fazer a limpeza pode ocupar qualquer uma das duas. Guardar aptidão
-# por posição faria o usuário marcar duas caixas que sempre dizem a mesma
-# coisa, e obrigaria a migrar o cadastro de todo mundo para criar a segunda.
+# As posições de uma mesma categoria são o mesmo trabalho e valem uma aptidão
+# só: quem pode fazer o "antes" ou o "depois" pode ocupar qualquer uma das
+# posições daquela categoria. Guardar aptidão por posição faria o usuário
+# marcar várias caixas que sempre dizem a mesma coisa, e obrigaria a migrar o
+# cadastro de todo mundo cada vez que se adiciona mais uma posição.
 APTIDAO_DA_POSICAO = {
+    FuncaoOperacionalEnum.LIMPEZA_1_PESSOA_2: FuncaoOperacionalEnum.LIMPEZA_1,
     FuncaoOperacionalEnum.LIMPEZA_2_PESSOA_2: FuncaoOperacionalEnum.LIMPEZA_2,
+    FuncaoOperacionalEnum.LIMPEZA_2_PESSOA_3: FuncaoOperacionalEnum.LIMPEZA_2,
 }
 
 # O que vira caixa de marcação no cadastro do integrante.
@@ -71,10 +77,13 @@ def aptidao_exigida(funcao: FuncaoOperacionalEnum) -> FuncaoOperacionalEnum:
     return APTIDAO_DA_POSICAO.get(funcao, funcao)
 
 
-# A aptidão da limpeza vale para as duas posições, então o rótulo dela não pode
-# citar só a primeira — a mensagem sairia falando da Pessoa 1 para quem tentou
-# preencher a Pessoa 2.
-ROTULO_DA_APTIDAO = {FuncaoOperacionalEnum.LIMPEZA_2: "Limpeza 2"}
+# A aptidão de cada categoria vale para todas as suas posições, então o
+# rótulo não pode citar uma pessoa específica — a mensagem sairia falando da
+# Pessoa 1 para quem tentou preencher a Pessoa 2 ou a Pessoa 3.
+ROTULO_DA_APTIDAO = {
+    FuncaoOperacionalEnum.LIMPEZA_1: "Limpeza - Antes da Gira",
+    FuncaoOperacionalEnum.LIMPEZA_2: "Limpeza - Depois da Gira",
+}
 
 
 def rotulo_aptidao(funcao: FuncaoOperacionalEnum) -> str:
@@ -88,6 +97,7 @@ class TipoGiraEnum(str, enum.Enum):
     CABOCLO = "Caboclo"
     EXU = "Exu"
     POMBA_GIRA = "Pomba Gira"
+    ESQUERDA = "Esquerda"
     CRIANCA = "Erê"
     MIRIM = "Mirim"
     BAIANO = "Baiano"
@@ -231,7 +241,12 @@ class EscalaGira(Base):
         Integer, ForeignKey("entidades.id", ondelete="CASCADE"), nullable=True
     )
     cargo = Column(Enum(CargoEnum), nullable=False)
+    # Foi para a gira. Diferente de ``atendeu``: dá para estar presente e não
+    # ter feito atendimento (ex.: cambono de apoio, médium que só assistiu).
     presente = Column(Boolean, nullable=False, default=False)
+    # Fez atendimento ao público, incorporado ou não numa entidade específica
+    # — a entidade é opcional mesmo quando este campo é verdadeiro.
+    atendeu = Column(Boolean, nullable=False, default=False)
 
     gira = relationship("Gira", back_populates="escalas")
     pessoa = relationship("Pessoa", back_populates="escalas")
@@ -296,6 +311,15 @@ class ItemEstoque(Base):
     contar_por_foto = Column(Boolean, nullable=False, default=True)
     notas = Column(String, nullable=True)
     criado_em = Column(DateTime, server_default=func.now())
+    # Nasce igual a ``criado_em`` e o SQLAlchemy reescreve sozinho a cada
+    # UPDATE da linha — cadastro editado ou saldo recontado, tanto faz.
+    # ``default`` (em Python) além de ``server_default``: em bancos migrados
+    # a coluna pode ter chegado sem default no próprio SQLite (ALTER TABLE
+    # ADD COLUMN não aceita CURRENT_TIMESTAMP lá), e sem isso um item novo
+    # nasceria com a data em branco.
+    atualizado_em = Column(
+        DateTime, server_default=func.now(), default=func.now(), onupdate=func.now()
+    )
 
     movimentos = relationship(
         "MovimentoEstoque",

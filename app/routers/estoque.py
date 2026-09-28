@@ -1,16 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import ItemEstoque, MovimentoEstoque, OrigemMovimentoEnum
 from app.schemas import (
+    AplicarLeituraRequest,
     ItemEstoqueCreate,
     ItemEstoqueResponse,
     ItemEstoqueUpdate,
+    LeituraFotoResponse,
     MovimentoEstoqueRequest,
     MovimentoEstoqueResponse,
     ResumoEstoqueResponse,
 )
+from app.services import visao_estoque
 from app.services.estoque import definir_quantidade, registrar_movimento, resumo
 
 router = APIRouter(prefix="/estoque", tags=["Estoque"])
@@ -134,3 +137,126 @@ def listar_movimentos(item_id: int, db: Session = Depends(get_db)):
         .order_by(MovimentoEstoque.id.desc())
         .all()
     )
+
+
+@router.get("/leitura-foto/disponivel")
+def leitura_por_foto_disponivel():
+    """A UI usa para só mostrar o botão quando a chave está configurada."""
+    return {"disponivel": visao_estoque.configurada()}
+
+
+@router.post("/leitura-foto", response_model=LeituraFotoResponse)
+async def ler_estoque_por_foto(
+    fotos: list[UploadFile] = File(...), db: Session = Depends(get_db)
+):
+    """Analisa as fotos e devolve uma proposta — não grava nada.
+
+    Só vira saldo quando o usuário conferir e mandar aplicar.
+    """
+    # Itens que a foto não consegue contar (erva, folha, ensacado) ficam de
+    # fora: pedir para a IA adivinhá-los só geraria número errado para conferir.
+    catalogo = (
+        db.query(ItemEstoque)
+        .filter(ItemEstoque.contar_por_foto.is_(True))
+        .order_by(ItemEstoque.nome)
+        .all()
+    )
+
+    imagens = [(await foto.read(), foto.content_type) for foto in fotos]
+    try:
+        proposta = visao_estoque.analisar(imagens, catalogo)
+    except visao_estoque.VisaoIndisponivelError as erro:
+        raise HTTPException(status_code=503, detail=str(erro)) from erro
+
+    por_id = {item.id: item for item in catalogo}
+    encontrados = []
+    vistos: set[int] = set()
+    for lido in proposta.get("encontrados", []):
+        item = por_id.get(lido.get("item_id"))
+        # Id que não existe no catálogo enviado é descartado em silêncio: não
+        # há item real para conferir contra ele.
+        if item is None or item.id in vistos:
+            continue
+        vistos.add(item.id)
+        encontrados.append(
+            {
+                "item_id": item.id,
+                "nome": item.nome,
+                "unidade": item.unidade,
+                "quantidade_atual": item.quantidade,
+                "quantidade_lida": max(int(lido.get("quantidade") or 0), 0),
+                "confianca": lido.get("confianca") or "media",
+                "observacao": (lido.get("observacao") or "").strip() or None,
+            }
+        )
+
+    return {
+        "encontrados": encontrados,
+        "novos": [
+            {
+                "nome": (novo.get("nome") or "").strip(),
+                "quantidade": max(int(novo.get("quantidade") or 0), 0),
+                "unidade": (novo.get("unidade") or "unidade").strip() or "unidade",
+                "categoria": (novo.get("categoria") or "").strip() or None,
+                "confianca": novo.get("confianca") or "media",
+            }
+            for novo in proposta.get("novos", [])
+            if (novo.get("nome") or "").strip()
+        ],
+        # O que não apareceu fica como está. Zerar seria o pior erro possível:
+        # a foto mostra uma prateleira, não o estoque inteiro.
+        "nao_apareceram": [
+            {
+                "item_id": item.id,
+                "nome": item.nome,
+                "unidade": item.unidade,
+                "quantidade_atual": item.quantidade,
+            }
+            for item in catalogo
+            if item.id not in vistos
+        ],
+    }
+
+
+@router.post("/leitura-foto/aplicar", response_model=list[ItemEstoqueResponse])
+def aplicar_leitura(dados: AplicarLeituraRequest, db: Session = Depends(get_db)):
+    """Grava as linhas que o usuário aceitou, já com os números que ele revisou.
+
+    Item do catálogo é recontado; o que a foto viu de novo entra cadastrado,
+    com o nome que o usuário conferiu na tela. Nada aqui é automático: só
+    chega o que ele marcou.
+    """
+    for ajuste in dados.ajustes:
+        if (ajuste.item_id is None) == (ajuste.nome is None):
+            raise HTTPException(
+                status_code=400,
+                detail="Cada ajuste precisa de item_id (existente) ou nome (novo).",
+            )
+
+    for ajuste in dados.ajustes:
+        quantidade = max(ajuste.quantidade, 0)
+        if ajuste.item_id is not None:
+            item = _buscar(db, ajuste.item_id)
+            definir_quantidade(
+                db, item, quantidade, OrigemMovimentoEnum.FOTO, "Leitura por foto"
+            )
+            continue
+
+        nome = ajuste.nome.strip()
+        if not nome:
+            raise HTTPException(status_code=400, detail="Item novo sem nome.")
+        _recusar_nome_repetido(db, nome, ignorar_id=None)
+        item = ItemEstoque(
+            nome=nome,
+            categoria=ajuste.categoria,
+            unidade=ajuste.unidade or "unidade",
+            quantidade=0,
+        )
+        db.add(item)
+        if quantidade:
+            registrar_movimento(
+                db, item, quantidade, OrigemMovimentoEnum.FOTO, "Leitura por foto"
+            )
+
+    db.commit()
+    return db.query(ItemEstoque).order_by(ItemEstoque.nome).all()

@@ -86,6 +86,7 @@ class EscalaGiraBase(BaseModel):
     entidade_id: int | None = None
     cargo: CargoEnum
     presente: bool = False
+    atendeu: bool = False
 
 
 class EscalaGiraCreate(EscalaGiraBase):
@@ -100,12 +101,13 @@ class EscalaGiraResponse(EscalaGiraBase):
 
 
 class TrabalhadorGira(BaseModel):
-    """Uma pessoa que trabalhou na gira; sem entidade quando só cambonou."""
+    """Uma pessoa da escala; entidade só faz sentido quando ``atendeu``."""
 
     pessoa_id: int
     entidade_id: int | None = None
     cargo: CargoEnum | None = None
     presente: bool = True
+    atendeu: bool = False
 
 
 # ---------- Funções operacionais ----------
@@ -142,8 +144,11 @@ class RelatorioGiraResponse(BaseModel):
 
 
 # ---------- Presença ----------
-class PresencaUpdate(BaseModel):
-    presente: bool
+class EscalaAtualizacaoRequest(BaseModel):
+    """Correção pontual pós-gira. Campo ausente (``None``) não é tocado."""
+
+    presente: bool | None = None
+    atendeu: bool | None = None
 
 
 # ---------- Pagamento ----------
@@ -166,6 +171,20 @@ class PagamentoResponse(PagamentoBase):
 
     class Config:
         from_attributes = True
+
+
+class StatusCompetenciaResponse(BaseModel):
+    """O que vale para a pessoa no mês, com a isenção herdada já resolvida.
+
+    ``herdado`` distingue "isento porque alguém marcou neste mês" de "isento
+    porque a isenção de um mês anterior continua valendo" — sem lançamento
+    gravado nesta competência.
+    """
+
+    pessoa_id: int
+    status: StatusPagamentoEnum
+    herdado: bool
+    valor: float | None = None
 
 
 class InadimplenteResponse(BaseModel):
@@ -199,7 +218,7 @@ class GiraResumoResponse(BaseModel):
     nome: str | None = None
     tipo: TipoGiraEnum
     data: datetime
-    escalados: int
+    atenderam: int
     presentes: int
 
 
@@ -218,6 +237,44 @@ class VisaoGeralResponse(BaseModel):
 class IntegranteEspiritualResponse(BaseModel):
     pessoa: PessoaResponse
     entidades: list[EntidadeResponse]
+
+
+# ---------- Visão operacional ----------
+class GiraOperacionalResponse(BaseModel):
+    gira_id: int
+    nome: str | None = None
+    tipo: TipoGiraEnum
+    data: datetime
+    presentes: int
+    atenderam: int
+    faltaram: int
+    porteira_atendimento: list[str] = []
+    porteira_senha: list[str] = []
+    limpeza_1: list[str] = []
+    limpeza_2: list[str] = []
+
+
+class IntegranteOperacionalResponse(BaseModel):
+    """Quantas vezes a pessoa esteve, atendeu, faltou e ocupou cada função no mês."""
+
+    pessoa_id: int
+    nome: str
+    cargo: CargoEnum
+    presencas: int
+    atendimentos: int
+    faltas: int
+    porteira_atendimento: int = 0
+    porteira_senha: int = 0
+    limpeza_1: int = 0
+    limpeza_2: int = 0
+
+
+class OperacionalMensalResponse(BaseModel):
+    ano: int
+    mes: int
+    total_giras: int
+    giras: list[GiraOperacionalResponse]
+    integrantes: list[IntegranteOperacionalResponse]
 
 
 # ---------- Estoque ----------
@@ -246,6 +303,7 @@ class ItemEstoqueResponse(ItemEstoqueBase):
     quantidade: int
     em_alerta: bool
     criado_em: datetime
+    atualizado_em: datetime
 
     class Config:
         from_attributes = True
@@ -276,6 +334,62 @@ class ResumoEstoqueResponse(BaseModel):
     total_itens: int
     qtd_em_alerta: int
     itens_em_alerta: list[ItemEstoqueResponse]
+
+
+# ---------- Leitura do estoque por foto ----------
+class ItemLidoResponse(BaseModel):
+    """Item do catálogo que apareceu nas fotos, com o saldo atual ao lado."""
+
+    item_id: int
+    nome: str
+    unidade: str
+    quantidade_atual: int
+    quantidade_lida: int
+    confianca: str
+    observacao: str | None = None
+
+
+class ItemNovoResponse(BaseModel):
+    """Coisa vista nas fotos que ainda não está cadastrada."""
+
+    nome: str
+    quantidade: int
+    unidade: str
+    categoria: str | None = None
+    confianca: str
+
+
+class ItemAusenteResponse(BaseModel):
+    """Item do catálogo que não apareceu — fica como está, não zera."""
+
+    item_id: int
+    nome: str
+    unidade: str
+    quantidade_atual: int
+
+
+class LeituraFotoResponse(BaseModel):
+    encontrados: list[ItemLidoResponse]
+    novos: list[ItemNovoResponse]
+    nao_apareceram: list[ItemAusenteResponse]
+
+
+class AjusteLeitura(BaseModel):
+    """Uma linha da proposta que o usuário aceitou.
+
+    ``item_id`` para recontagem de item existente, ``nome`` para cadastrar um
+    item novo — um ou outro, nunca os dois.
+    """
+
+    item_id: int | None = None
+    nome: str | None = None
+    quantidade: int
+    unidade: str = "unidade"
+    categoria: str | None = None
+
+
+class AplicarLeituraRequest(BaseModel):
+    ajustes: list[AjusteLeitura]
 
 
 # ---------- Mensagens ----------

@@ -1,6 +1,9 @@
 """Estoque: cadastro manual, recontagem, ajuste avulso e alerta de mínimo."""
 
+from datetime import datetime
+
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 from app.main import app
 from app.models import ItemEstoque
@@ -179,3 +182,74 @@ def test_itens_marcados_para_a_foto_ficam_distinguiveis():
 
         assert por_nome["Vela branca"] is True
         assert por_nome["Arruda"] is False
+
+
+def test_item_nasce_com_atualizado_em_preenchido():
+    with TestClient(app) as client:
+        item = criar(client, "Sabão da costa", quantidade=2)
+
+        assert item["atualizado_em"] is not None
+        # Nasceu agora: as duas datas começam iguais, ninguém mexeu ainda.
+        assert item["atualizado_em"] == item["criado_em"]
+
+
+def test_atualizado_em_reflete_a_ultima_mudanca(db):
+    """Recontar ou editar o cadastro tem de trazer a data para o presente."""
+    with TestClient(app) as client:
+        item = criar(client, "Charuto de palha", quantidade=1)
+        item_id = item["id"]
+
+        # Empurra as duas datas para o passado, simulando um item cadastrado
+        # há muito tempo e nunca mais tocado.
+        antigo = datetime(2020, 1, 1)  # noqa: DTZ001
+        db.execute(
+            text(
+                "UPDATE itens_estoque SET criado_em = :antigo, "
+                "atualizado_em = :antigo WHERE id = :id"
+            ),
+            {"antigo": antigo, "id": item_id},
+        )
+        db.commit()
+        assert (
+            client.get(f"/estoque/itens/{item_id}")
+            .json()["atualizado_em"]
+            .startswith("2020-01-01")
+        )
+
+        recontado = client.post(
+            f"/estoque/itens/{item_id}/movimentos", json={"quantidade": 5}
+        )
+        assert recontado.status_code == 200, recontado.text
+
+        depois = client.get(f"/estoque/itens/{item_id}").json()
+        # A recontagem atualiza o saldo: a data de atualização acompanha.
+        assert not depois["atualizado_em"].startswith("2020-01-01")
+        # A data de criação, essa, é história — não muda com o uso do item.
+        assert depois["criado_em"].startswith("2020-01-01")
+
+
+def test_editar_cadastro_tambem_atualiza_a_data(db):
+    """Não é só saldo: mudar nome, categoria etc. também conta como atualização."""
+    with TestClient(app) as client:
+        item = criar(client, "Charuto preto", quantidade=1)
+        item_id = item["id"]
+
+        antigo = datetime(2020, 1, 1)  # noqa: DTZ001
+        db.execute(
+            text("UPDATE itens_estoque SET atualizado_em = :antigo WHERE id = :id"),
+            {"antigo": antigo, "id": item_id},
+        )
+        db.commit()
+
+        editado = client.put(
+            f"/estoque/itens/{item_id}",
+            json={
+                "nome": "Charuto preto grosso",
+                "categoria": "Oferenda",
+                "unidade": "unidade",
+                "minimo_alerta": None,
+                "contar_por_foto": True,
+            },
+        )
+        assert editado.status_code == 200, editado.text
+        assert not editado.json()["atualizado_em"].startswith("2020-01-01")

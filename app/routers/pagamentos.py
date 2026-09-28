@@ -10,8 +10,9 @@ from app.schemas import (
     PagamentoCreate,
     PagamentoResponse,
     ResumoFinanceiroResponse,
+    StatusCompetenciaResponse,
 )
-from app.services.financeiro import evolucao_anual, resumo_mensal
+from app.services.financeiro import evolucao_anual, resumo_mensal, status_por_pessoa
 
 router = APIRouter(prefix="/pagamentos", tags=["Pagamentos"])
 
@@ -74,6 +75,16 @@ def resumo_financeiro(
     db: Session = Depends(get_db),
 ):
     return resumo_mensal(db, ano, mes)
+
+
+@router.get("/competencia", response_model=list[StatusCompetenciaResponse])
+def status_da_competencia(
+    ano: int = Query(...),
+    mes: int = Query(..., ge=1, le=12),
+    db: Session = Depends(get_db),
+):
+    """Situação de cada integrante ativo no mês, com a isenção herdada."""
+    return list(status_por_pessoa(db, ano, mes).values())
 
 
 @router.get("/evolucao", response_model=list[EvolucaoMensalResponse])

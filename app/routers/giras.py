@@ -21,7 +21,7 @@ from app.schemas import (
     SugestaoFuncaoResponse,
 )
 from app.services.escala import gerar_escala_automatica
-from app.services.funcoes import CARGOS_ELEGIVEIS, sugerir
+from app.services.funcoes import sugerir
 from app.services.relatorio import gerar_relatorio_gira, gerar_relatorio_texto
 
 router = APIRouter(prefix="/giras", tags=["Giras"])
@@ -104,14 +104,18 @@ def definir_escala(
 ):
     """Substitui a escala da gira pelos trabalhadores informados pelo usuário.
 
-    O cargo, quando omitido, vem do cadastro da pessoa. A entidade é opcional:
-    fica nula quando a pessoa apenas cambonou, sem incorporar.
+    O cargo, quando omitido, vem do cadastro da pessoa. A entidade é opcional
+    mesmo para quem atendeu — só entra quando o usuário sabe e informa qual
+    guia incorporou. Quem não está na lista não some do registro: entra como
+    falta, presente e atendeu ambos falsos, para a visão operacional mostrar
+    quem faltou, não só quem esteve.
     """
     gira = db.query(Gira).filter(Gira.id == gira_id).first()
     if not gira:
         raise HTTPException(status_code=404, detail="Gira não encontrada.")
 
     novas = []
+    presentes_ids = set()
     for trabalhador in dados.trabalhadores:
         pessoa = db.query(Pessoa).filter(Pessoa.id == trabalhador.pessoa_id).first()
         if not pessoa:
@@ -120,12 +124,9 @@ def definir_escala(
                 detail=f"Pessoa {trabalhador.pessoa_id} não encontrada.",
             )
 
-        if trabalhador.entidade_id is not None:
-            entidade = (
-                db.query(Entidade)
-                .filter(Entidade.id == trabalhador.entidade_id)
-                .first()
-            )
+        entidade_id = trabalhador.entidade_id if trabalhador.atendeu else None
+        if entidade_id is not None:
+            entidade = db.query(Entidade).filter(Entidade.id == entidade_id).first()
             if not entidade:
                 raise HTTPException(status_code=404, detail="Entidade não encontrada.")
             if entidade.medium_id != pessoa.id:
@@ -134,13 +135,32 @@ def definir_escala(
                     detail=f"{entidade.nome} não é guia de {pessoa.nome}.",
                 )
 
+        presentes_ids.add(pessoa.id)
         novas.append(
             EscalaGira(
                 gira_id=gira.id,
                 pessoa_id=pessoa.id,
-                entidade_id=trabalhador.entidade_id,
+                entidade_id=entidade_id,
                 cargo=trabalhador.cargo or pessoa.cargo,
                 presente=trabalhador.presente,
+                atendeu=trabalhador.atendeu,
+            )
+        )
+
+    faltantes = (
+        db.query(Pessoa)
+        .filter(Pessoa.ativo == 1, Pessoa.id.notin_(presentes_ids))
+        .all()
+    )
+    for pessoa in faltantes:
+        novas.append(
+            EscalaGira(
+                gira_id=gira.id,
+                pessoa_id=pessoa.id,
+                entidade_id=None,
+                cargo=pessoa.cargo,
+                presente=False,
+                atendeu=False,
             )
         )
 
@@ -157,9 +177,24 @@ def definir_escala(
 
 
 def _validar_funcoes(db: Session, gira_id: int, funcoes) -> list[FuncaoGira]:
-    """Uma pessoa por função, sem repetir pessoa, só rodízio/cambono ativos."""
+    """Uma função por vez, sem repetir a mesma função; só quem o cadastro marca apto.
+
+    Uma pessoa pode ocupar várias funções na mesma gira — quem faz a limpeza
+    também pode atender com guia, e o terreiro nem sempre tem gente sobrando
+    para cada posição. Só a função em si não se repete (isso já é garantido
+    pela unicidade (gira, função) no banco).
+
+    A aptidão é cobrada de escalação nova, não do que já está gravado. Quem
+    trabalhou numa gira e depois teve a aptidão retirada continua valendo
+    naquela gira: a alternativa é o usuário não conseguir mais salvar a gira
+    antiga por causa de uma mudança de cadastro feita depois — e nem apagar
+    da história alguém que de fato trabalhou.
+    """
+    ja_salvas = {
+        (registro.funcao, registro.pessoa_id)
+        for registro in db.query(FuncaoGira).filter(FuncaoGira.gira_id == gira_id)
+    }
     vistos_funcao: set = set()
-    vistos_pessoa: set = set()
     registros = []
 
     for item in funcoes:
@@ -168,26 +203,14 @@ def _validar_funcoes(db: Session, gira_id: int, funcoes) -> list[FuncaoGira]:
                 status_code=400,
                 detail=f"{item.funcao.value} foi informada mais de uma vez.",
             )
-        if item.pessoa_id in vistos_pessoa:
-            raise HTTPException(
-                status_code=400,
-                detail="A mesma pessoa não pode ocupar duas funções na mesma gira.",
-            )
 
         pessoa = db.query(Pessoa).filter(Pessoa.id == item.pessoa_id).first()
         if not pessoa:
             raise HTTPException(
                 status_code=404, detail=f"Pessoa {item.pessoa_id} não encontrada."
             )
-        if pessoa.cargo not in CARGOS_ELEGIVEIS:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"{pessoa.nome} é {pessoa.cargo.value}; essas funções são só de "
-                    "médiuns de rodízio e cambonos."
-                ),
-            )
-        if aptidao_exigida(item.funcao) not in pessoa.funcoes_aptas:
+        inedita = (item.funcao, item.pessoa_id) not in ja_salvas
+        if inedita and aptidao_exigida(item.funcao) not in pessoa.funcoes_aptas:
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -197,7 +220,6 @@ def _validar_funcoes(db: Session, gira_id: int, funcoes) -> list[FuncaoGira]:
             )
 
         vistos_funcao.add(item.funcao)
-        vistos_pessoa.add(item.pessoa_id)
         registros.append(
             FuncaoGira(gira_id=gira_id, pessoa_id=pessoa.id, funcao=item.funcao)
         )

@@ -5,14 +5,18 @@ from app.models import EscalaGira, Gira
 
 def gerar_relatorio_gira(db: Session, gira_id: int) -> dict:
     """
-    Monta o relatório completo de uma gira: dados da gira + escalas
-    (médiuns, entidades e cargos envolvidos).
+    Monta o relatório completo de uma gira: dados da gira + escalas de quem
+    esteve presente (quem faltou não entra no relatório de quem trabalhou).
     """
     gira = db.query(Gira).filter(Gira.id == gira_id).first()
     if not gira:
         return None
 
-    escalas = db.query(EscalaGira).filter(EscalaGira.gira_id == gira_id).all()
+    escalas = (
+        db.query(EscalaGira)
+        .filter(EscalaGira.gira_id == gira_id, EscalaGira.presente.is_(True))
+        .all()
+    )
 
     return {
         "gira": gira,
@@ -41,11 +45,14 @@ def gerar_relatorio_texto(db: Session, gira_id: int) -> str:
     ]
 
     for escala in escalas:
-        atuacao = (
-            f"incorporando {escala.entidade.nome} ({escala.entidade.tipo.value})"
-            if escala.entidade
-            else "sem incorporação"
-        )
+        if escala.entidade:
+            atuacao = (
+                f"incorporando {escala.entidade.nome} ({escala.entidade.tipo.value})"
+            )
+        elif escala.atendeu:
+            atuacao = "atendeu"
+        else:
+            atuacao = "sem atendimento"
         linhas.append(f"- {escala.pessoa.nome} ({escala.cargo.value}) {atuacao}")
 
     if gira.observacoes:

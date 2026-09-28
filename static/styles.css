@@ -12,6 +12,7 @@
   --destaque: #ad7c1a;
   --azul: #2f7fb8;
   --rosa: #c2699e;
+  --media: #c9973f;
   --perigo: #c0392b;
   --whats: #2e8f5a;
 }
@@ -152,7 +153,13 @@ main { padding: 20px 24px 60px; }
 .lista li:hover { background: var(--painel-claro); }
 .lista li.selecionado { background: var(--painel-claro); outline: 1px solid var(--destaque); }
 .lista .etiqueta { color: var(--texto-fraco); font-size: 12px; }
-.lista .subtexto { display: block; color: var(--texto-fraco); font-size: 11px; margin-top: 4px; }
+.lista .subtexto { color: var(--texto-fraco); font-size: 11px; margin-top: 2px; }
+
+/* O `li` é uma linha: nome à esquerda, área/cargo à direita. Sem esta coluna
+   própria, o que deveria vir *abaixo* do nome vira só mais um pedaço espremido
+   na mesma linha, encostado na borda direita. */
+.integrante-dados { display: flex; flex-direction: column; min-width: 0; }
+.integrante-dados .subtexto { overflow-wrap: anywhere; }
 
 /* As tabelas chegam a sete colunas e não cabem num celular de jeito nenhum.
    Rolam na horizontal dentro do próprio painel, em vez de esticar o body. */
@@ -185,7 +192,37 @@ main { padding: 20px 24px 60px; }
 
 .dica { color: var(--texto-fraco); font-size: 12px; margin: 4px 0 0; }
 
+/* Composição da corrente logo acima da lista: discreta de propósito, é
+   contexto para a lista que vem abaixo e não um painel de números. */
+.resumo-cargos {
+  color: var(--texto-fraco);
+  font-size: 12px;
+  margin: 8px 0 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--borda);
+}
+.resumo-cargos strong { color: var(--texto); font-weight: 600; }
+
+/* Marca quem não foi à gira sem precisar de mais uma coluna de texto. */
+.tabela .linha-falta td:first-child { color: var(--perigo); }
+.tabela .celula-falta { color: var(--perigo); font-weight: 600; }
+
 .tabela .qtd-item { width: 76px; }
+
+/* Conferência por foto: número lido é editável, e a confiança baixa precisa
+   saltar aos olhos porque é onde o usuário deve olhar com atenção. */
+.tabela .qtd-leitura { width: 72px; }
+.tabela .nome-leitura { width: 100%; }
+.col-de-para { color: var(--texto-fraco); white-space: nowrap; }
+.etiqueta-conf {
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+.conf-media { background: var(--media); color: #fff; }
+.conf-baixa { background: var(--perigo); color: #fff; }
 .linha-alerta td { background: rgba(192, 57, 43, .06); }
 .etiqueta-alerta {
   background: var(--perigo);
@@ -250,15 +287,20 @@ main { padding: 20px 24px 60px; }
 
 /* Prefixados com .modal-caixa porque `.modal-caixa label { display: block }`
    tem especificidade maior e, sem isso, achata a grade em uma coluna só. */
-.modal-caixa .trabalhador {
-  display: grid;
-  grid-template-columns: 20px 1fr minmax(160px, 240px);
+.modal-caixa .trabalhador { margin-bottom: 8px; }
+.trabalhador-nome { font-size: 13px; color: var(--texto); }
+.modal-caixa .trabalhador-presenca { margin-bottom: 2px; }
+/* Recuado sob o nome, para ler como uma pergunta de acompanhamento da
+   presença, não como mais um integrante na lista. */
+.modal-caixa .trabalhador-atendimento {
+  display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 6px;
+  margin-left: 28px;
+  margin-bottom: 4px;
 }
-.trabalhador-nome { font-size: 13px; color: var(--texto); }
-.trabalhador select { margin-top: 0; }
+.modal-caixa .atendeu-toggle { margin-bottom: 0; flex: none; }
+.trabalhador-atendimento select { margin-top: 0; max-width: 220px; }
 
 .funcoes { display: flex; flex-direction: column; gap: 10px; }
 
@@ -319,10 +361,11 @@ main { padding: 20px 24px 60px; }
   .colunas { grid-template-columns: 1fr; }
 }
 
-/* Abaixo disto o modal já ocupa a tela toda e não sobra largura para o nome e
-   o select lado a lado — o select desce para a própria linha. */
+/* Abaixo disto o modal já ocupa a tela toda e não sobra largura para o
+   rótulo "Atendeu" e o select lado a lado — o select desce para a própria
+   linha. */
 @media (max-width: 560px) {
-  .modal-caixa .trabalhador { grid-template-columns: 20px 1fr; gap: 4px 10px; }
-  .trabalhador select { grid-column: 2 / -1; }
+  .modal-caixa .trabalhador-atendimento { flex-wrap: wrap; }
+  .trabalhador-atendimento select { flex-basis: 100%; max-width: none; }
   .modal-caixa .funcao { grid-template-columns: 1fr; }
 }

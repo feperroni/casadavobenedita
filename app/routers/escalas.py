@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Entidade, EscalaGira, Gira, Pessoa
-from app.schemas import EscalaGiraCreate, EscalaGiraResponse, PresencaUpdate
+from app.schemas import EscalaAtualizacaoRequest, EscalaGiraCreate, EscalaGiraResponse
 
 router = APIRouter(prefix="/escalas", tags=["Escalas"])
 
@@ -48,15 +48,19 @@ def listar_escalas_por_gira(gira_id: int, db: Session = Depends(get_db)):
     return db.query(EscalaGira).filter(EscalaGira.gira_id == gira_id).all()
 
 
-@router.patch("/{escala_id}/presenca", response_model=EscalaGiraResponse)
-def marcar_presenca(
-    escala_id: int, dados: PresencaUpdate, db: Session = Depends(get_db)
+@router.patch("/{escala_id}", response_model=EscalaGiraResponse)
+def atualizar_escala(
+    escala_id: int, dados: EscalaAtualizacaoRequest, db: Session = Depends(get_db)
 ):
+    """Corrige presença e/ou atendimento depois que a gira já foi salva."""
     escala = db.query(EscalaGira).filter(EscalaGira.id == escala_id).first()
     if not escala:
         raise HTTPException(status_code=404, detail="Escala não encontrada.")
 
-    escala.presente = dados.presente
+    if dados.presente is not None:
+        escala.presente = dados.presente
+    if dados.atendeu is not None:
+        escala.atendeu = dados.atendeu
     db.commit()
     db.refresh(escala)
     return escala

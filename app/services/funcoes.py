@@ -7,8 +7,9 @@ igualmente carregado, a preferência vai para quem já ficou mais tempo sem
 trabalhar e para a função que a pessoa fez menos vezes, para variar as posições
 em vez de fixar cada um num posto.
 
-Só entram no rodízio médiuns de rodízio e cambonos ativos, e apenas nas funções
-para as quais o cadastro os marca como aptos.
+Entra no rodízio todo integrante ativo, seja qual for o cargo — quem pode ou
+não ocupar cada função é definido só pela aptidão marcada no cadastro dele,
+nunca pelo cargo.
 """
 
 from datetime import datetime
@@ -16,25 +17,18 @@ from typing import NamedTuple
 
 from sqlalchemy.orm import Session
 
-from app.models import (
-    CargoEnum,
-    FuncaoGira,
-    FuncaoOperacionalEnum,
-    Gira,
-    Pessoa,
-    aptidao_exigida,
-)
+from app.models import FuncaoGira, FuncaoOperacionalEnum, Gira, Pessoa, aptidao_exigida
 
 # Ordem de preenchimento; também evita a mesma pessoa em duas funções na gira.
 ORDEM_FUNCOES = (
     FuncaoOperacionalEnum.PORTEIRA_ATENDIMENTO,
     FuncaoOperacionalEnum.PORTEIRA_SENHA,
     FuncaoOperacionalEnum.LIMPEZA_1,
+    FuncaoOperacionalEnum.LIMPEZA_1_PESSOA_2,
     FuncaoOperacionalEnum.LIMPEZA_2,
     FuncaoOperacionalEnum.LIMPEZA_2_PESSOA_2,
+    FuncaoOperacionalEnum.LIMPEZA_2_PESSOA_3,
 )
-
-CARGOS_ELEGIVEIS = (CargoEnum.RODIZIO, CargoEnum.CAMBONO)
 
 # Quem nunca trabalhou precisa vir antes de quem trabalhou na data mais antiga
 # possível; com a contagem à frente no critério, o sentinela nunca desempata
@@ -53,12 +47,7 @@ class Historico(NamedTuple):
 
 
 def elegiveis(db: Session) -> list[Pessoa]:
-    return (
-        db.query(Pessoa)
-        .filter(Pessoa.ativo == 1, Pessoa.cargo.in_(CARGOS_ELEGIVEIS))
-        .order_by(Pessoa.nome)
-        .all()
-    )
+    return db.query(Pessoa).filter(Pessoa.ativo == 1).order_by(Pessoa.nome).all()
 
 
 def _historico(db: Session, ignorar_gira_id: int | None) -> Historico:

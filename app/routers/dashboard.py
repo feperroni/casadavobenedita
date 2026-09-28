@@ -3,7 +3,12 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import AreaEnum, Entidade, EscalaGira, Gira, Pessoa
-from app.schemas import IntegranteEspiritualResponse, VisaoGeralResponse
+from app.schemas import (
+    IntegranteEspiritualResponse,
+    OperacionalMensalResponse,
+    VisaoGeralResponse,
+)
+from app.services.operacional import resumo_mensal
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -28,7 +33,7 @@ def visao_geral(db: Session = Depends(get_db)):
                 "nome": gira.nome,
                 "tipo": gira.tipo,
                 "data": gira.data,
-                "escalados": len(da_gira),
+                "atenderam": len([e for e in da_gira if e.atendeu]),
                 "presentes": len([e for e in da_gira if e.presente]),
             }
         )
@@ -40,7 +45,7 @@ def visao_geral(db: Session = Depends(get_db)):
         "total_curimba": por_area.get(AreaEnum.CURIMBA, 0),
         "total_giras": len(giras),
         "total_entidades": db.query(Entidade).count(),
-        "mediuns_que_atenderam": len({e.pessoa_id for e in escalas if e.presente}),
+        "mediuns_que_atenderam": len({e.pessoa_id for e in escalas if e.atendeu}),
         "ultimas_giras": ultimas_giras,
     }
 
@@ -50,3 +55,9 @@ def visao_espiritual(db: Session = Depends(get_db)):
     """Cada integrante com os guias/entidades vinculados."""
     pessoas = db.query(Pessoa).order_by(Pessoa.nome).all()
     return [{"pessoa": pessoa, "entidades": pessoa.guias} for pessoa in pessoas]
+
+
+@router.get("/operacional", response_model=OperacionalMensalResponse)
+def visao_operacional(ano: int, mes: int, db: Session = Depends(get_db)):
+    """Presença, atendimento e falta de cada integrante no mês informado."""
+    return resumo_mensal(db, ano, mes)

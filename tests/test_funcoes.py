@@ -3,8 +3,11 @@
 from datetime import datetime, timedelta
 from io import BytesIO
 
+import pytest
 from fastapi.testclient import TestClient
 from openpyxl import load_workbook
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from app import migracoes
 from app.database import engine
@@ -14,6 +17,7 @@ from app.models import (
     AptidaoFuncao,
     AreaEnum,
     CargoEnum,
+    Entidade,
     FuncaoGira,
     FuncaoOperacionalEnum,
     Gira,
@@ -23,8 +27,10 @@ from app.models import (
 from app.services.funcoes import sugerir
 
 LIMPEZA_1 = FuncaoOperacionalEnum.LIMPEZA_1
+LIMPEZA_1_PESSOA_2 = FuncaoOperacionalEnum.LIMPEZA_1_PESSOA_2
 LIMPEZA_2 = FuncaoOperacionalEnum.LIMPEZA_2
 LIMPEZA_2_PESSOA_2 = FuncaoOperacionalEnum.LIMPEZA_2_PESSOA_2
+LIMPEZA_2_PESSOA_3 = FuncaoOperacionalEnum.LIMPEZA_2_PESSOA_3
 PORTEIRA_ATENDIMENTO = FuncaoOperacionalEnum.PORTEIRA_ATENDIMENTO
 PORTEIRA_SENHA = FuncaoOperacionalEnum.PORTEIRA_SENHA
 
@@ -72,16 +78,17 @@ def por_funcao_id(sugestoes):
     return {s["funcao"]: s["pessoa_id"] for s in sugestoes}
 
 
-def test_apenas_rodizio_e_cambono_entram_no_sorteio(db):
-    criar_pessoa(db, "Ana Fixa", cargo=CargoEnum.FIXO)
+def test_qualquer_cargo_apto_entra_no_rodizio(db):
+    """Cargo não decide mais quem entra no rodízio — só a aptidão e estar ativo."""
+    fixa = criar_pessoa(db, "Ana Fixa", cargo=CargoEnum.FIXO)
     criar_pessoa(db, "Bruno Inativo", cargo=CargoEnum.RODIZIO, ativo=0)
     cambono = criar_pessoa(db, "Carla Cambono", cargo=CargoEnum.CAMBONO)
 
     sugestoes = por_funcao(db)
 
-    # Só sobrou a cambona: ela pega a primeira função e as demais ficam vazias.
-    assert sugestoes[PORTEIRA_ATENDIMENTO]["pessoa_id"] == cambono.id
-    assert sugestoes[LIMPEZA_1]["pessoa_id"] is None
+    # O inativo fica de fora; a fixa e a cambona entram, em ordem alfabética.
+    assert sugestoes[PORTEIRA_ATENDIMENTO]["pessoa_id"] == fixa.id
+    assert sugestoes[PORTEIRA_SENHA]["pessoa_id"] == cambono.id
 
 
 def test_ninguem_repete_enquanto_houver_quem_nao_trabalhou(db):
@@ -114,32 +121,50 @@ def test_ninguem_repete_enquanto_houver_quem_nao_trabalhou(db):
 
 def test_quem_acabou_de_trabalhar_sai_da_frente_de_todas_as_funcoes(db):
     ana = criar_pessoa(db, "Ana")
-    for nome in ("Bruno", "Carla", "Diego", "Elena", "Fabio"):
+    for nome in ("Bruno", "Carla", "Diego", "Elena", "Fabio", "Gustavo", "Helo"):
         criar_pessoa(db, nome)
 
     criar_gira(db, data_em(2026, 1, 5), [(LIMPEZA_1, ana)])
 
     sugestoes = por_funcao(db)
 
-    # A carga é contada junto: ter feito a Limpeza 1 tira a Ana da frente de
-    # todas as posições, e não só da fila da Limpeza 1. Fosse por função, ela
+    # A carga é contada junto: ter feito o "antes da gira" tira a Ana da
+    # frente de todas as posições, e não só dessa fila. Fosse por função, ela
     # voltaria já na próxima gira numa das outras — que é o que se quer evitar.
     escolhidos = {s["nome"] for s in sugestoes.values()}
     assert "Ana" not in escolhidos
-    # Com cinco colegas zerados para cinco posições, ela nem é chamada.
-    assert escolhidos == {"Bruno", "Carla", "Diego", "Elena", "Fabio"}
+    # Com sete colegas zerados para sete posições, ela nem é chamada.
+    assert escolhidos == {
+        "Bruno",
+        "Carla",
+        "Diego",
+        "Elena",
+        "Fabio",
+        "Gustavo",
+        "Helo",
+    }
 
 
-def test_as_duas_posicoes_da_limpeza_2_caem_em_pessoas_diferentes(db):
-    for nome in ("Ana", "Bruno", "Carla", "Diego", "Elena"):
+def test_as_posicoes_de_uma_categoria_caem_em_pessoas_diferentes(db):
+    for nome in ("Ana", "Bruno", "Carla", "Diego", "Elena", "Fabio", "Gustavo"):
         criar_pessoa(db, nome)
 
     sugestoes = por_funcao(db)
 
-    primeira = sugestoes[LIMPEZA_2]["pessoa_id"]
-    segunda = sugestoes[LIMPEZA_2_PESSOA_2]["pessoa_id"]
-    assert primeira and segunda
-    assert primeira != segunda
+    antes = {
+        sugestoes[LIMPEZA_1]["pessoa_id"],
+        sugestoes[LIMPEZA_1_PESSOA_2]["pessoa_id"],
+    }
+    depois = {
+        sugestoes[LIMPEZA_2]["pessoa_id"],
+        sugestoes[LIMPEZA_2_PESSOA_2]["pessoa_id"],
+        sugestoes[LIMPEZA_2_PESSOA_3]["pessoa_id"],
+    }
+    assert None not in antes and len(antes) == 2
+    assert None not in depois and len(depois) == 3
+    # Uma pessoa não ocupa duas posições na mesma gira, nem dentro da mesma
+    # categoria nem entre categorias diferentes.
+    assert antes.isdisjoint(depois)
 
 
 def test_menos_carregado_vem_antes_de_quem_ficou_mais_tempo_parado(db):
@@ -231,7 +256,7 @@ def test_salvar_a_segunda_posicao_exige_a_aptidao_de_limpeza(db):
     # A mensagem nomeia a aptidão que falta, sem citar a outra posição: quem
     # tentou preencher a Pessoa 2 não deve ler um erro sobre a Pessoa 1.
     detalhe = resposta.json()["detail"]
-    assert "apto para Limpeza 2." in detalhe
+    assert "apto para Limpeza - Depois da Gira." in detalhe
     assert "Pessoa 1" not in detalhe
 
 
@@ -252,15 +277,62 @@ def test_salvar_funcao_para_quem_nao_e_apto_e_recusado(db):
     assert "não está marcado como apto" in resposta.json()["detail"]
 
 
+def test_regravar_gira_antiga_nao_esbarra_em_aptidao_retirada_depois(db):
+    """Tirar a aptidão de alguém não pode travar a gira em que já trabalhou.
+
+    O usuário abria uma gira antiga, não mexia em nada, clicava em Salvar e
+    levava "fulano não está marcado como apto" — sem saída, porque a tela
+    mantém quem está gravado justamente para não apagar o histórico.
+    """
+    ana = criar_pessoa(db, "Ana")
+    gira = criar_gira(db, data_em(2026, 1, 5), [(PORTEIRA_ATENDIMENTO, ana)])
+
+    with TestClient(app) as client:
+        # O cadastro muda depois: a Ana deixa de fazer porteira.
+        restringida = client.put(
+            f"/pessoas/{ana.id}",
+            json={
+                "nome": "Ana",
+                "cargo": CargoEnum.RODIZIO.value,
+                "area": AreaEnum.MEDIUNIDADE.value,
+                "funcoes_aptas": [LIMPEZA_1.value],
+            },
+        )
+        assert restringida.status_code == 200, restringida.text
+
+        regravar = client.put(
+            f"/giras/{gira.id}/escala",
+            json={
+                "trabalhadores": [],
+                "funcoes": [
+                    {"funcao": PORTEIRA_ATENDIMENTO.value, "pessoa_id": ana.id}
+                ],
+            },
+        )
+        assert regravar.status_code == 200, regravar.text
+
+        # E a escalação inédita continua barrada: só o que já estava vale.
+        bruno = criar_pessoa(db, "Bruno", funcoes=[LIMPEZA_1])
+        nova = client.put(
+            f"/giras/{gira.id}/escala",
+            json={
+                "trabalhadores": [],
+                "funcoes": [
+                    {"funcao": PORTEIRA_ATENDIMENTO.value, "pessoa_id": bruno.id}
+                ],
+            },
+        )
+        assert nova.status_code == 400
+        assert "não está marcado como apto" in nova.json()["detail"]
+
+
 def test_mesma_pessoa_nao_ocupa_duas_funcoes_na_mesma_gira(db):
-    for nome in ("Ana", "Bruno", "Carla", "Diego", "Elena"):
+    for nome in ("Ana", "Bruno", "Carla", "Diego", "Elena", "Fabio", "Gustavo"):
         criar_pessoa(db, nome)
 
     escolhidos = [s["pessoa_id"] for s in sugerir(db)]
 
-    assert (
-        len(set(escolhidos)) == 5
-    ), "as cinco posições devem cair em pessoas distintas"
+    assert len(set(escolhidos)) == 7, "as sete posições devem cair em pessoas distintas"
 
 
 def test_gira_em_edicao_nao_penaliza_quem_ja_esta_nela(db):
@@ -276,8 +348,9 @@ def test_gira_em_edicao_nao_penaliza_quem_ja_esta_nela(db):
     em_edicao = criar_gira(db, data_em(2026, 1, 22), [(LIMPEZA_1, zara)])
 
     # Todos com uma gira nas costas: a ordem sai pela data, e a Zara, por ser a
-    # mais recente, cai na última função da vez.
-    assert por_funcao(db)[LIMPEZA_2]["nome"] == "Zara"
+    # mais recente, é a última das quatro a ser escalada — a quarta posição na
+    # ordem do rodízio, com só quatro pessoas aptas para sete vagas.
+    assert por_funcao(db)[LIMPEZA_1_PESSOA_2]["nome"] == "Zara"
     # Ignorando a gira em edição, a Zara volta a contar como quem não trabalhou
     # e reassume a frente — senão reabrir a gira empurraria a própria escalada
     # para o fim da fila.
@@ -285,7 +358,8 @@ def test_gira_em_edicao_nao_penaliza_quem_ja_esta_nela(db):
     assert sem_a_gira_aberta[PORTEIRA_ATENDIMENTO]["nome"] == "Zara"
 
 
-def test_salvar_funcoes_pela_api_e_recusar_cargo_inelegivel(db):
+def test_salvar_funcoes_pela_api_aceita_qualquer_cargo_apto(db):
+    """Cargo não bloqueia mais a função — só a aptidão marcada no cadastro."""
     rodizio = criar_pessoa(db, "Ana", cargo=CargoEnum.RODIZIO)
     fixo = criar_pessoa(db, "Bruno", cargo=CargoEnum.FIXO)
     gira = criar_gira(db, data_em(2026, 1, 5))
@@ -304,18 +378,20 @@ def test_salvar_funcoes_pela_api_e_recusar_cargo_inelegivel(db):
         assert len(salvas) == 1
         assert salvas[0]["pessoa_id"] == rodizio.id
 
-        recusado = client.put(
+        tambem_ok = client.put(
             f"/giras/{gira.id}/escala",
             json={
                 "trabalhadores": [],
                 "funcoes": [{"funcao": LIMPEZA_1.value, "pessoa_id": fixo.id}],
             },
         )
-        assert recusado.status_code == 400
-        assert "rodízio e cambonos" in recusado.json()["detail"]
+        assert tambem_ok.status_code == 200, tambem_ok.text
+        salvas = client.get(f"/giras/{gira.id}/funcoes").json()
+        assert salvas[0]["pessoa_id"] == fixo.id
 
 
-def test_mesma_pessoa_em_duas_funcoes_e_recusada(db):
+def test_mesma_pessoa_pode_ocupar_duas_ou_mais_funcoes(db):
+    """Terreiro pequeno: às vezes é a mesma pessoa na limpeza e na porteira."""
     pessoa = criar_pessoa(db, "Ana")
     gira = criar_gira(db, data_em(2026, 1, 5))
 
@@ -325,14 +401,105 @@ def test_mesma_pessoa_em_duas_funcoes_e_recusada(db):
             json={
                 "trabalhadores": [],
                 "funcoes": [
+                    {"funcao": PORTEIRA_ATENDIMENTO.value, "pessoa_id": pessoa.id},
                     {"funcao": LIMPEZA_1.value, "pessoa_id": pessoa.id},
                     {"funcao": LIMPEZA_2.value, "pessoa_id": pessoa.id},
                 ],
             },
         )
+        assert resposta.status_code == 200, resposta.text
+
+        salvas = {
+            f["funcao"]: f["pessoa_id"]
+            for f in client.get(f"/giras/{gira.id}/funcoes").json()
+        }
+
+    assert salvas[PORTEIRA_ATENDIMENTO.value] == pessoa.id
+    assert salvas[LIMPEZA_1.value] == pessoa.id
+    assert salvas[LIMPEZA_2.value] == pessoa.id
+
+
+def test_a_mesma_funcao_nao_pode_ser_informada_duas_vezes(db):
+    """O que continua proibido é repetir a função — não a pessoa."""
+    ana = criar_pessoa(db, "Ana")
+    bruno = criar_pessoa(db, "Bruno")
+    gira = criar_gira(db, data_em(2026, 1, 5))
+
+    with TestClient(app) as client:
+        resposta = client.put(
+            f"/giras/{gira.id}/escala",
+            json={
+                "trabalhadores": [],
+                "funcoes": [
+                    {"funcao": LIMPEZA_1.value, "pessoa_id": ana.id},
+                    {"funcao": LIMPEZA_1.value, "pessoa_id": bruno.id},
+                ],
+            },
+        )
 
     assert resposta.status_code == 400
-    assert "duas funções" in resposta.json()["detail"]
+    assert "mais de uma vez" in resposta.json()["detail"]
+
+
+def test_salvar_gira_com_posicoes_vazias_e_aceito(db):
+    """Nem toda gira tem gente para as sete posições — nenhuma é obrigatória."""
+    ana = criar_pessoa(db, "Ana")
+    gira = criar_gira(db, data_em(2026, 1, 5))
+
+    with TestClient(app) as client:
+        resposta = client.put(
+            f"/giras/{gira.id}/escala",
+            json={
+                "trabalhadores": [],
+                "funcoes": [
+                    {"funcao": PORTEIRA_ATENDIMENTO.value, "pessoa_id": ana.id}
+                ],
+            },
+        )
+
+    assert resposta.status_code == 200, resposta.text
+    salvas = client.get(f"/giras/{gira.id}/funcoes").json()
+    assert len(salvas) == 1
+
+
+def test_migracao_libera_posicao_nova_presa_por_schema_antigo(db):
+    """Reproduz o 500 real: banco criado antes de uma posição existir.
+
+    ``funcoes_gira`` nasce, no SQLite, com um CHECK gravado na criação da
+    tabela — exatamente o que aconteceu em produção quando a Limpeza 2 virou
+    duas posições: o CHECK antigo recusava o quinto valor e o INSERT quebrava
+    com IntegrityError, sem chegar a um 400 tratado. É esse crash que a
+    migração ``sincronizar_enums`` existe para evitar.
+    """
+    with engine.begin() as conexao:
+        conexao.execute(text("DROP TABLE funcoes_gira"))
+        conexao.execute(text("""
+            CREATE TABLE funcoes_gira (
+                id INTEGER NOT NULL PRIMARY KEY,
+                gira_id INTEGER NOT NULL REFERENCES giras(id) ON DELETE CASCADE,
+                pessoa_id INTEGER NOT NULL REFERENCES pessoas(id) ON DELETE CASCADE,
+                funcao VARCHAR(21) NOT NULL,
+                CONSTRAINT uq_funcao_gira UNIQUE (gira_id, funcao),
+                CHECK (funcao IN ("PORTEIRA_ATENDIMENTO","PORTEIRA_SENHA","LIMPEZA_1","LIMPEZA_2"))
+            )
+        """))
+
+    ana = criar_pessoa(db, "Ana")
+    gira = criar_gira(db, data_em(2026, 1, 5))
+
+    with pytest.raises(IntegrityError):
+        db.add(FuncaoGira(gira_id=gira.id, pessoa_id=ana.id, funcao=LIMPEZA_2_PESSOA_3))
+        db.commit()
+    db.rollback()
+
+    migracoes.aplicar(engine)
+    db.expire_all()
+
+    # A mesma gravação que quebrava antes agora funciona, sem precisar de
+    # nenhum ajuste manual no banco.
+    db.add(FuncaoGira(gira_id=gira.id, pessoa_id=ana.id, funcao=LIMPEZA_2_PESSOA_3))
+    db.commit()
+    assert db.query(FuncaoGira).filter(FuncaoGira.gira_id == gira.id).count() == 1
 
 
 def test_planilha_sai_com_cabecalho_e_funcoes_sugeridas(db):
@@ -356,7 +523,110 @@ def test_planilha_sai_com_cabecalho_e_funcoes_sugeridas(db):
     assert "Gira de Caboclo" in texto
     assert "12/08/2026" in texto
     assert "Porteira de Atendimento" in texto
-    # Ana é elegível e deve sair sugerida; Bruno é fixo, mas entra na lista de
-    # integrantes para preencher à mão.
+    # Cargo não tira ninguém da planilha: Ana e Bruno (fixo) são ambos aptos e
+    # aparecem, sugeridos ou na lista de integrantes para preencher à mão.
     assert "Ana" in texto
     assert "Bruno" in texto
+
+
+def test_quem_nao_e_marcado_na_escala_entra_como_falta(db):
+    """Quem some da lista de trabalhadores não some do registro — vira falta."""
+    presente = criar_pessoa(db, "Ana")
+    ausente = criar_pessoa(db, "Bruno")
+    inativo = criar_pessoa(db, "Carla Inativa", ativo=0)
+    gira = criar_gira(db, data_em(2026, 1, 5))
+
+    with TestClient(app) as client:
+        resposta = client.put(
+            f"/giras/{gira.id}/escala",
+            json={
+                "trabalhadores": [
+                    {"pessoa_id": presente.id, "presente": True, "atendeu": False}
+                ],
+                "funcoes": [],
+            },
+        )
+        assert resposta.status_code == 200, resposta.text
+        escalas = {
+            e["pessoa_id"]: e for e in client.get(f"/escalas/gira/{gira.id}").json()
+        }
+
+    assert escalas[presente.id]["presente"] is True
+    assert escalas[ausente.id]["presente"] is False
+    assert escalas[ausente.id]["atendeu"] is False
+    # Quem está inativo não polui a escala de faltas.
+    assert inativo.id not in escalas
+
+
+def test_atender_sem_informar_o_guia_e_aceito(db):
+    """ "Atendeu" não obriga escolher qual guia incorporou — fica opcional."""
+    ana = criar_pessoa(db, "Ana")
+    gira = criar_gira(db, data_em(2026, 1, 5))
+
+    with TestClient(app) as client:
+        resposta = client.put(
+            f"/giras/{gira.id}/escala",
+            json={
+                "trabalhadores": [
+                    {"pessoa_id": ana.id, "presente": True, "atendeu": True}
+                ],
+                "funcoes": [],
+            },
+        )
+        assert resposta.status_code == 200, resposta.text
+        escala = client.get(f"/escalas/gira/{gira.id}").json()[0]
+
+    assert escala["atendeu"] is True
+    assert escala["entidade_id"] is None
+
+
+def test_entidade_sem_atender_e_ignorada(db):
+    """Sem marcar "atendeu", a entidade enviada não é gravada."""
+    ana = criar_pessoa(db, "Ana")
+    entidade = Entidade(
+        nome="Vovó Maria", tipo=TipoGiraEnum.PRETO_VELHO, medium_id=ana.id
+    )
+    db.add(entidade)
+    db.commit()
+    db.refresh(entidade)
+    gira = criar_gira(db, data_em(2026, 1, 5))
+
+    with TestClient(app) as client:
+        resposta = client.put(
+            f"/giras/{gira.id}/escala",
+            json={
+                "trabalhadores": [
+                    {
+                        "pessoa_id": ana.id,
+                        "presente": True,
+                        "atendeu": False,
+                        "entidade_id": entidade.id,
+                    }
+                ],
+                "funcoes": [],
+            },
+        )
+        assert resposta.status_code == 200, resposta.text
+        escala = client.get(f"/escalas/gira/{gira.id}").json()[0]
+
+    assert escala["entidade_id"] is None
+
+
+def test_corrigir_presenca_e_atendimento_depois_da_gira(db):
+    """A aba operacional corrige o que foi marcado errado no cadastro."""
+    criar_pessoa(db, "Ana")
+    gira = criar_gira(db, data_em(2026, 1, 5))
+
+    with TestClient(app) as client:
+        client.put(
+            f"/giras/{gira.id}/escala", json={"trabalhadores": [], "funcoes": []}
+        )
+        escala_id = client.get(f"/escalas/gira/{gira.id}").json()[0]["id"]
+
+        corrigida = client.patch(
+            f"/escalas/{escala_id}", json={"presente": True, "atendeu": True}
+        )
+
+    assert corrigida.status_code == 200, corrigida.text
+    assert corrigida.json()["presente"] is True
+    assert corrigida.json()["atendeu"] is True

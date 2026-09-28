@@ -15,13 +15,19 @@ from authlib.integrations.starlette_client import OAuth, OAuthError
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+APP_ENV = os.getenv("APP_ENV", "development").lower()
+
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 SECRET_KEY = os.getenv(
     "SECRET_KEY", "troque-esta-chave-em-producao"
 )  # manter o default histórico para compatibilidade em dev; em produção o startup bloqueia esse valor padrão
-# Em produção (Railway) o cookie de sessão deve ser enviado só por HTTPS.
-COOKIE_HTTPS_ONLY = os.getenv("COOKIE_HTTPS_ONLY", "false").lower() in (
+# Em produção (Railway) o cookie de sessão deve ser enviado só por HTTPS. O
+# padrão acompanha o ambiente: esquecer a variável não pode ser o caminho que
+# manda o cookie de sessão em texto claro.
+COOKIE_HTTPS_ONLY = os.getenv(
+    "COOKIE_HTTPS_ONLY", "true" if APP_ENV == "production" else "false"
+).lower() in (
     "1",
     "true",
     "sim",
@@ -43,8 +49,36 @@ def auth_habilitada() -> bool:
 
 
 def emails_permitidos() -> set[str]:
-    brutos = os.getenv("EMAILS_PERMITIDOS", "casadavobenedita@gmail.com")
+    """Quem pode entrar. Sem a variável, ninguém entra.
+
+    Não tem e-mail padrão de propósito: um endereço embutido no código faz a
+    allowlist parecer configurada quando não está, e autoriza uma conta que
+    ninguém conferiu. Lista vazia tranca todo mundo do lado de fora, que é a
+    forma segura de errar.
+    """
+    brutos = os.getenv("EMAILS_PERMITIDOS", "")
     return {email.strip().lower() for email in brutos.split(",") if email.strip()}
+
+
+def problemas_de_configuracao() -> list[str]:
+    """O que impede o acesso restrito de valer de verdade.
+
+    Sem isto a aplicação falha *aberta*: faltando as credenciais do Google,
+    ``auth_habilitada()`` devolve falso, o middleware deixa tudo passar e os
+    dados do terreiro ficam disponíveis para quem tiver o endereço — sem erro,
+    sem aviso, sem nada no log.
+    """
+    problemas = []
+    if not auth_habilitada():
+        problemas.append(
+            "GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET precisam estar definidos — "
+            "sem eles a aplicação não pede login de ninguém."
+        )
+    if not emails_permitidos():
+        problemas.append(
+            "EMAILS_PERMITIDOS precisa listar ao menos um e-mail autorizado."
+        )
+    return problemas
 
 
 oauth = OAuth()
@@ -73,7 +107,6 @@ def login(request: Request):
         <body><main style="display:flex;min-height:80vh;align-items:center;justify-content:center">
         <div class="painel" style="text-align:center;max-width:380px">
         <h2>Gestão do Terreiro — Casa da Vó Benedita</h2>
-        <p class="dica">Acesso restrito à conta autorizada do terreiro.</p>
         <a class="btn btn-primario" href="/auth/google">Entrar com Google</a>
         </div></main></body></html>"""
     )
@@ -84,7 +117,12 @@ async def entrar_com_google(request: Request):
     if not auth_habilitada():
         raise HTTPException(status_code=503, detail="Login Google não configurado.")
     redirect_uri = request.url_for("callback_google")
-    return await oauth.google.authorize_redirect(request, str(redirect_uri))
+    # prompt=select_account: sem isto o Google pula direto para a conta já
+    # logada no navegador/telefone, sem perguntar qual usar. Num aparelho
+    # compartilhado isso logaria com a conta errada sem dar chance de escolher.
+    return await oauth.google.authorize_redirect(
+        request, str(redirect_uri), prompt="select_account"
+    )
 
 
 @router.get("/auth/google/callback", name="callback_google", include_in_schema=False)

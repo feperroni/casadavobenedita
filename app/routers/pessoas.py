@@ -56,7 +56,7 @@ def criar_pessoa(pessoa: PessoaCreate, db: Session = Depends(get_db)):
 
 @router.get("/", response_model=list[PessoaResponse])
 def listar_pessoas(db: Session = Depends(get_db)):
-    return db.query(Pessoa).all()
+    return db.query(Pessoa).order_by(Pessoa.nome).all()
 
 
 @router.get("/{pessoa_id}", response_model=PessoaResponse)

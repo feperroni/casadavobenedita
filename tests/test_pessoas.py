@@ -35,6 +35,26 @@ def test_criar_pessoa_com_admin_e_notas():
         assert any(p["email"] == payload["email"] and p["admin"] for p in pessoas)
 
 
+def test_listar_pessoas_vem_em_ordem_alfabetica():
+    with TestClient(app) as client:
+        for nome in ("Zeca", "Ana", "Mira"):
+            resposta = client.post(
+                "/pessoas/",
+                json={
+                    "nome": nome,
+                    "email": f"{nome.lower()}-{uuid4().hex[:8]}@example.com",
+                    "cargo": "Médium de Rodízio",
+                    "area": "Mediunidade",
+                },
+            )
+            assert resposta.status_code == 200, resposta.text
+
+        nomes = [p["nome"] for p in client.get("/pessoas/").json()]
+
+    # As três entram fora de ordem; a listagem devolve alfabética mesmo assim.
+    assert nomes.index("Ana") < nomes.index("Mira") < nomes.index("Zeca")
+
+
 def test_pessoa_nasce_apta_a_tudo_quando_o_campo_e_omitido():
     payload = {
         "nome": "João de Ogum",
@@ -45,13 +65,13 @@ def test_pessoa_nasce_apta_a_tudo_quando_o_campo_e_omitido():
     with TestClient(app) as client:
         criada = client.post("/pessoas/", json=payload)
         assert criada.status_code == 200, criada.text
-        # Quatro aptidões, não cinco: a segunda posição da Limpeza 2 é coberta
-        # pela mesma marcação da primeira.
+        # Quatro aptidões, não sete: as posições extras de cada categoria são
+        # cobertas pela mesma marcação da primeira.
         assert criada.json()["funcoes_aptas"] == [
             "Porteira de Atendimento",
             "Porteira de Senha",
-            "Limpeza 1",
-            "Limpeza 2 - Pessoa 1",
+            "Limpeza - Antes da Gira - Pessoa 1",
+            "Limpeza - Depois da Gira - Pessoa 1",
         ]
 
 
@@ -78,21 +98,36 @@ def test_editar_mantendo_parte_das_funcoes():
         # Desmarca as duas porteiras e mantém as limpezas.
         atualizada = client.put(
             f"/pessoas/{pessoa_id}",
-            json={**payload, "funcoes_aptas": ["Limpeza 1", "Limpeza 2 - Pessoa 1"]},
+            json={
+                **payload,
+                "funcoes_aptas": [
+                    "Limpeza - Antes da Gira - Pessoa 1",
+                    "Limpeza - Depois da Gira - Pessoa 1",
+                ],
+            },
         )
         assert atualizada.status_code == 200, atualizada.text
         assert atualizada.json()["funcoes_aptas"] == [
-            "Limpeza 1",
-            "Limpeza 2 - Pessoa 1",
+            "Limpeza - Antes da Gira - Pessoa 1",
+            "Limpeza - Depois da Gira - Pessoa 1",
         ]
 
         # Salvar de novo sem mudar nada também tem de passar.
         de_novo = client.put(
             f"/pessoas/{pessoa_id}",
-            json={**payload, "funcoes_aptas": ["Limpeza 1", "Limpeza 2 - Pessoa 1"]},
+            json={
+                **payload,
+                "funcoes_aptas": [
+                    "Limpeza - Antes da Gira - Pessoa 1",
+                    "Limpeza - Depois da Gira - Pessoa 1",
+                ],
+            },
         )
         assert de_novo.status_code == 200, de_novo.text
-        assert de_novo.json()["funcoes_aptas"] == ["Limpeza 1", "Limpeza 2 - Pessoa 1"]
+        assert de_novo.json()["funcoes_aptas"] == [
+            "Limpeza - Antes da Gira - Pessoa 1",
+            "Limpeza - Depois da Gira - Pessoa 1",
+        ]
 
 
 def test_restringir_e_depois_ampliar_as_funcoes_da_pessoa():
@@ -111,13 +146,19 @@ def test_restringir_e_depois_ampliar_as_funcoes_da_pessoa():
         pessoa_id = criada.json()["id"]
         atualizada = client.put(
             f"/pessoas/{pessoa_id}",
-            json={**payload, "funcoes_aptas": ["Limpeza 1", "Limpeza 2 - Pessoa 1"]},
+            json={
+                **payload,
+                "funcoes_aptas": [
+                    "Limpeza - Antes da Gira - Pessoa 1",
+                    "Limpeza - Depois da Gira - Pessoa 1",
+                ],
+            },
         )
         assert atualizada.status_code == 200, atualizada.text
         # A troca substitui, não acumula: a porteira antiga sai da lista.
         assert atualizada.json()["funcoes_aptas"] == [
-            "Limpeza 1",
-            "Limpeza 2 - Pessoa 1",
+            "Limpeza - Antes da Gira - Pessoa 1",
+            "Limpeza - Depois da Gira - Pessoa 1",
         ]
 
         # Lista vazia é uma escolha válida: não participa de nenhuma função.

@@ -74,9 +74,10 @@ O módulo é genérico: serve para cobrança, avisos de gira ou qualquer comunic
 ## Acesso (login Google)
 
 O acesso web é restrito por allowlist de e-mail. Defina `GOOGLE_CLIENT_ID`,
-`GOOGLE_CLIENT_SECRET` e `EMAILS_PERMITIDOS` (padrão: `casadavobenedita@gmail.com`);
-qualquer outra conta Google recebe 403. Sem as credenciais definidas o login fica
-desativado (útil em desenvolvimento local).
+`GOOGLE_CLIENT_SECRET` e `EMAILS_PERMITIDOS` (e-mails da Casa da Vó Benedita
+autorizados a entrar, sem valor padrão); qualquer outra conta Google recebe
+403. Sem as credenciais definidas o login fica desativado (útil em
+desenvolvimento local).
 
 No Google Cloud Console → *APIs e serviços* → *Credenciais* → *ID do cliente OAuth*
 (tipo "Aplicativo da Web"), cadastre como URI de redirecionamento autorizado:
@@ -112,7 +113,7 @@ unificados, para revisão.
 | --- | --- | --- |
 | `DATABASE_URL` | não | URL do banco. Padrão: `sqlite:///./gestao_giras.db` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | não | Credenciais OAuth. Se ausentes, o login fica desativado |
-| `EMAILS_PERMITIDOS` | não | E-mails autorizados, separados por vírgula. Padrão: `casadavobenedita@gmail.com` |
+| `EMAILS_PERMITIDOS` | em produção | E-mails autorizados, separados por vírgula. Sem valor padrão. |
 | `SECRET_KEY` | em produção | Assina o cookie de sessão. Em produção, defina um valor forte e único (ex.: gerado por `python -c "import secrets; print(secrets.token_urlsafe(48))"`). Não comite este valor. |
 | `COOKIE_HTTPS_ONLY` | não | `true` em produção (HTTPS) |
 

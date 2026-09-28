@@ -73,6 +73,28 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def exigir_revalidacao_do_front(request: Request, call_next):
+    """Sem isto, um deploy podia atualizar a página e deixar o JS de antes.
+
+    ``index.html`` e ``app.js`` não têm versão no nome do arquivo, então o
+    navegador pode continuar usando uma cópia antiga de um deles por tempo
+    indefinido — sem ``Cache-Control``, isso vale mesmo depois de um F5
+    forçado, porque o cache heurístico do navegador não é o mesmo mecanismo
+    que o F5 invalida. Foi exatamente esse descompasso — HTML novo com
+    colunas que o JS antigo não sabia preencher — que deixou a tabela do
+    Operacional com colunas vazias depois do deploy.
+
+    ``no-cache`` não desliga o cache: obriga o navegador a confirmar com o
+    servidor antes de usar o que já tem. Arquivo igual volta rápido (304
+    Not Modified, sem baixar de novo); só o que mudou é entregue de novo.
+    """
+    resposta = await call_next(request)
+    if request.url.path == "/" or request.url.path.startswith("/static/"):
+        resposta.headers["Cache-Control"] = "no-cache"
+    return resposta
+
+
 @app.on_event("startup")
 async def startup_event():
     """Operações de inicialização que tinham efeitos colaterais no import.
@@ -87,6 +109,17 @@ async def startup_event():
         raise RuntimeError(
             "SECRET_KEY está ausente ou é inseguro em produção. Defina a variável de ambiente SECRET_KEY com um valor aleatório e forte."
         )
+
+    # Em produção, recusar startup sem o acesso restrito configurado. Subir
+    # assim deixaria o cadastro do terreiro aberto a quem tivesse o endereço,
+    # e — pior — sem nenhum sinal de que está aberto.
+    if APP_ENV == "production":
+        problemas = auth.problemas_de_configuracao()
+        if problemas:
+            raise RuntimeError(
+                "Acesso restrito incompleto em produção, a aplicação ficaria "
+                "aberta: " + " ".join(problemas)
+            )
 
     # Cria as tabelas e aplica migrações de forma explícita na inicialização
     Base.metadata.create_all(bind=engine)

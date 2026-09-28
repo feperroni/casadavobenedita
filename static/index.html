@@ -15,7 +15,8 @@
     </div>
     <nav class="tabs">
       <button class="tab active" data-view="geral">Visão Geral</button>
-      <button class="tab" data-view="financeiro">Financeiro / Operacional</button>
+      <button class="tab" data-view="financeiro">Financeiro</button>
+      <button class="tab" data-view="operacional">Operacional</button>
       <button class="tab" data-view="espiritual">Espiritual</button>
       <button class="tab" data-view="estoque">Estoque</button>
     </nav>
@@ -48,6 +49,7 @@
               <button id="btn-remover" class="btn btn-perigo">Remover</button>
             </div>
           </div>
+          <p class="resumo-cargos" id="resumo-cargos" hidden></p>
           <p class="dica" id="dica-lista">Clique em um integrante para selecioná-lo.</p>
           <ul id="lista-integrantes" class="lista"></ul>
         </aside>
@@ -68,7 +70,7 @@
           <h3>Últimas giras</h3>
           <div class="tabela-rolagem">
             <table class="tabela">
-              <thead><tr><th>Data</th><th>Gira</th><th>Linha</th><th>Trabalharam</th><th>Presentes</th><th></th></tr></thead>
+              <thead><tr><th>Data</th><th>Gira</th><th>Linha</th><th>Atenderam</th><th>Presentes</th><th></th></tr></thead>
               <tbody id="tabela-giras"></tbody>
             </table>
           </div>
@@ -120,17 +122,78 @@
           </table>
         </div>
       </div>
+    </section>
+
+    <!-- ---------- Operacional ---------- -->
+    <section id="view-operacional" class="view">
+      <div class="painel">
+        <div class="painel-titulo">
+          <h2>Competência</h2>
+          <div class="acoes">
+            <select id="op-mes"></select>
+            <input type="number" id="op-ano" min="2000" max="2100" />
+            <button id="btn-recarregar-op" class="btn btn-primario">Atualizar</button>
+          </div>
+        </div>
+        <div class="cards cards-compactos">
+          <div class="card"><span class="card-valor" id="op-giras">0</span><span class="card-rotulo">Giras no mês</span></div>
+          <div class="card"><span class="card-valor" id="op-presencas">0</span><span class="card-rotulo">Presenças</span></div>
+          <div class="card"><span class="card-valor" id="op-atendimentos">0</span><span class="card-rotulo">Atendimentos</span></div>
+          <div class="card"><span class="card-valor" id="op-faltas">0</span><span class="card-rotulo">Faltas</span></div>
+        </div>
+      </div>
 
       <div class="painel">
         <div class="painel-titulo">
-          <h2>Operacional — presença nas giras</h2>
+          <h2>Frequência por integrante</h2>
+          <div class="acoes">
+            <select id="filtro-cargo-op" aria-label="Filtrar por cargo"></select>
+          </div>
+        </div>
+        <p class="dica">Conta só as giras em que a pessoa já estava cadastrada:
+          quem entrou depois não aparece com falta em gira anterior.</p>
+        <div class="tabela-rolagem">
+          <table class="tabela">
+            <thead>
+              <tr>
+                <th>Integrante</th><th>Cargo</th>
+                <th>Presenças</th><th>Atendeu</th><th>Faltas</th>
+                <th>Limpeza 1</th><th>Limpeza 2</th>
+                <th>Porteira de Atendimento</th><th>Porteira de Senha</th>
+              </tr>
+            </thead>
+            <tbody id="tabela-frequencia"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="painel">
+        <h2>Giras do mês</h2>
+        <div class="tabela-rolagem">
+          <table class="tabela">
+            <thead>
+              <tr>
+                <th>Data</th><th>Gira</th><th>Linha</th>
+                <th>Presentes</th><th>Atenderam</th><th>Faltaram</th>
+                <th>Limpeza 1</th><th>Limpeza 2</th>
+                <th>Porteira de Atendimento</th><th>Porteira de Senha</th>
+              </tr>
+            </thead>
+            <tbody id="tabela-giras-mes"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="painel">
+        <div class="painel-titulo">
+          <h2>Presença gira a gira</h2>
           <div class="acoes">
             <select id="filtro-gira"></select>
           </div>
         </div>
         <div class="tabela-rolagem">
           <table class="tabela">
-            <thead><tr><th>Integrante</th><th>Entidade</th><th>Função</th><th>Atendeu?</th></tr></thead>
+            <thead><tr><th>Integrante</th><th>Entidade</th><th>Cargo</th><th>Presente</th><th>Atendeu</th></tr></thead>
             <tbody id="tabela-presenca"></tbody>
           </table>
         </div>
@@ -176,8 +239,12 @@
           <h2>Estoque</h2>
           <div class="acoes">
             <input type="search" id="filtro-estoque" placeholder="Filtrar por nome" />
+            <button id="btn-ler-foto" class="btn" hidden>Conferir por foto</button>
             <button id="btn-adicionar-item" class="btn btn-primario">Adicionar item</button>
           </div>
+          <!-- Sem `capture`, de propósito: com ele o celular pula direto para a
+               câmera e não deixa escolher foto já tirada da galeria. -->
+          <input type="file" id="fotos-estoque" accept="image/*" multiple hidden />
         </div>
         <p class="dica">A quantidade vale da última conferência. Corrija o número
           na tabela e clique em Salvar para registrar a contagem.</p>
@@ -186,7 +253,7 @@
             <thead>
               <tr>
                 <th>Item</th><th>Categoria</th><th>Quantidade</th>
-                <th>Mínimo</th><th>Pela foto</th><th></th>
+                <th>Mínimo</th><th>Pela foto</th><th>Atualizado em</th><th></th>
               </tr>
             </thead>
             <tbody id="tabela-estoque"></tbody>
@@ -195,6 +262,21 @@
       </div>
     </section>
   </main>
+
+  <!-- ---------- Modal: conferência por foto ---------- -->
+  <div id="modal-leitura" class="modal">
+    <div class="modal-caixa modal-caixa-larga">
+      <h2>Conferência por foto</h2>
+      <p class="dica" id="leitura-resumo"></p>
+      <div id="leitura-conteudo"></div>
+      <div class="modal-acoes">
+        <button type="button" class="btn" data-fechar>Cancelar</button>
+        <button type="button" id="btn-aplicar-leitura" class="btn btn-primario">
+          Aplicar ao estoque
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- ---------- Modal: item de estoque ---------- -->
   <div id="modal-item" class="modal">
