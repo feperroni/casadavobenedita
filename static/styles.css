@@ -9,12 +9,12 @@
   --borda: #e6dcc3;
   --texto: #2b2620;
   --texto-fraco: #756b5a;
-  --destaque: #ad7c1a;
-  --azul: #2f7fb8;
-  --rosa: #c2699e;
-  --media: #c9973f;
-  --perigo: #c0392b;
-  --whats: #2e8f5a;
+  --destaque: #c17f00;
+  --azul: #0f6fd6;
+  --rosa: #c73b8e;
+  --media: #d9891f;
+  --perigo: #d32f2f;
+  --whats: #0ea152;
 }
 
 * { box-sizing: border-box; }
@@ -72,25 +72,35 @@ body::before {
   font-size: 14px;
 }
 
-.tab.active, .tab:hover { color: var(--texto); border-color: var(--destaque); }
+.tab:hover { color: var(--texto); border-color: var(--rosa); }
+.tab.active { background: var(--rosa); border-color: var(--rosa); color: #fff; }
 
 main { padding: 20px 24px 60px; }
 
 .view { display: none; }
 .view.active { display: block; }
 
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 20px; }
 .cards-compactos { margin-bottom: 16px; }
 
 .card {
   background: var(--painel);
   border: 1px solid var(--borda);
+  border-top: 3px solid var(--destaque);
   border-radius: 10px;
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
+
+/* Faixa do topo dos cards ciclando as cores do arco do brasão, como no
+   círculo colorido em volta do cruzeiro — puramente decorativo, os números
+   continuam sempre dourados para não confundir com significado. */
+.cards .card:nth-child(5n+2) { border-top-color: var(--azul); }
+.cards .card:nth-child(5n+3) { border-top-color: var(--rosa); }
+.cards .card:nth-child(5n+4) { border-top-color: var(--whats); }
+.cards .card:nth-child(5n+5) { border-top-color: var(--perigo); }
 
 /* O card do estoque é um <button> para levar até a aba; herda a aparência dos
    demais cards em vez de parecer um botão solto no meio deles. */
@@ -120,8 +130,8 @@ main { padding: 20px 24px 60px; }
 .modal-caixa h3 { font-size: 14px; margin: 20px 0 4px; color: var(--destaque); }
 .modal-caixa h3 + .dica { margin-bottom: 10px; }
 
-.painel-titulo { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.painel-titulo { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.acoes { display: flex; gap: 18px; flex-wrap: wrap; }
 
 .btn {
   background: var(--painel-claro);
@@ -135,6 +145,7 @@ main { padding: 20px 24px 60px; }
 
 .btn:hover { border-color: var(--destaque); }
 .btn-primario { background: var(--destaque); border-color: var(--destaque); color: #fff; font-weight: 600; }
+.btn-secundario { background: var(--azul); border-color: var(--azul); color: #fff; font-weight: 600; }
 .btn-perigo { background: var(--perigo); border-color: var(--perigo); color: #fff; }
 .btn-whats { background: var(--whats); border-color: var(--whats); color: #fff; font-weight: 600; }
 
@@ -151,7 +162,7 @@ main { padding: 20px 24px 60px; }
 }
 
 .lista li:hover { background: var(--painel-claro); }
-.lista li.selecionado { background: var(--painel-claro); outline: 1px solid var(--destaque); }
+.lista li.selecionado { background: var(--painel-claro); outline: 1px solid var(--rosa); }
 .lista .etiqueta { color: var(--texto-fraco); font-size: 12px; }
 .lista .subtexto { color: var(--texto-fraco); font-size: 11px; margin-top: 2px; }
 
@@ -223,7 +234,7 @@ main { padding: 20px 24px 60px; }
 }
 .conf-media { background: var(--media); color: #fff; }
 .conf-baixa { background: var(--perigo); color: #fff; }
-.linha-alerta td { background: rgba(192, 57, 43, .06); }
+.linha-alerta td { background: rgba(211, 47, 47, .06); }
 .etiqueta-alerta {
   background: var(--perigo);
   color: #fff;
