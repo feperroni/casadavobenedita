@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gestão do Terreiro — Casa da Vó Benedita</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="marca">
+      <!-- alt vazio de propósito: o título ao lado já diz o nome -->
+      <img class="marca-simbolo" src="/static/logo-marca.svg" alt="" />
+      <h1>Gestão do Terreiro — Casa da Vó Benedita</h1>
+    </div>
+    <nav class="tabs">
+      <button class="tab active" data-view="geral">Visão Geral</button>
+      <button class="tab" data-view="financeiro">Financeiro / Operacional</button>
+      <button class="tab" data-view="espiritual">Espiritual</button>
+      <button class="tab" data-view="estoque">Estoque</button>
+    </nav>
+    <div class="usuario" id="usuario"></div>
+  </header>
+
+  <main>
+    <!-- ---------- Visão Geral ---------- -->
+    <section id="view-geral" class="view active">
+      <div class="cards">
+        <div class="card"><span class="card-valor" id="kpi-mediuns">0</span><span class="card-rotulo">Médiuns</span></div>
+        <div class="card"><span class="card-valor" id="kpi-lideranca">0</span><span class="card-rotulo">Liderança</span></div>
+        <div class="card"><span class="card-valor" id="kpi-curimba">0</span><span class="card-rotulo">Curimba</span></div>
+        <div class="card"><span class="card-valor" id="kpi-integrantes">0</span><span class="card-rotulo">Total de integrantes</span></div>
+        <!-- Sem isto o alerta só apareceria para quem lembrasse de abrir a aba
+             Estoque, o que anula o próprio alerta. -->
+        <button type="button" class="card card-acionavel" id="card-estoque">
+          <span class="card-valor" id="kpi-estoque-alerta">0</span>
+          <span class="card-rotulo">Itens no mínimo</span>
+        </button>
+      </div>
+
+      <div class="colunas">
+        <aside class="painel">
+          <div class="painel-titulo">
+            <h2>Integrantes</h2>
+            <div class="acoes">
+              <button id="btn-adicionar" class="btn btn-primario">Adicionar</button>
+              <button id="btn-editar" class="btn">Editar</button>
+              <button id="btn-remover" class="btn btn-perigo">Remover</button>
+            </div>
+          </div>
+          <p class="dica" id="dica-lista">Clique em um integrante para selecioná-lo.</p>
+          <ul id="lista-integrantes" class="lista"></ul>
+        </aside>
+
+        <div class="painel painel-largo">
+          <div class="painel-titulo">
+            <h2>Panorama das giras</h2>
+            <div class="acoes">
+              <button id="btn-planilha-gira" class="btn">Gerar planilha</button>
+              <button id="btn-adicionar-gira" class="btn btn-primario">Adicionar gira</button>
+            </div>
+          </div>
+          <div class="cards cards-compactos">
+            <div class="card"><span class="card-valor" id="kpi-giras">0</span><span class="card-rotulo">Giras realizadas</span></div>
+            <div class="card"><span class="card-valor" id="kpi-atenderam">0</span><span class="card-rotulo">Médiuns que atenderam</span></div>
+            <div class="card"><span class="card-valor" id="kpi-entidades">0</span><span class="card-rotulo">Entidades cadastradas</span></div>
+          </div>
+          <h3>Últimas giras</h3>
+          <div class="tabela-rolagem">
+            <table class="tabela">
+              <thead><tr><th>Data</th><th>Gira</th><th>Linha</th><th>Trabalharam</th><th>Presentes</th><th></th></tr></thead>
+              <tbody id="tabela-giras"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- Financeiro / Operacional ---------- -->
+    <section id="view-financeiro" class="view">
+      <div class="painel">
+        <div class="painel-titulo">
+          <h2>Competência</h2>
+          <div class="acoes">
+            <select id="filtro-mes"></select>
+            <input type="number" id="filtro-ano" min="2000" max="2100" />
+            <button id="btn-recarregar-fin" class="btn btn-primario">Atualizar</button>
+          </div>
+        </div>
+        <div class="cards cards-compactos">
+          <div class="card"><span class="card-valor" id="fin-previsto">R$ 0</span><span class="card-rotulo">Previsto</span></div>
+          <div class="card"><span class="card-valor" id="fin-recebido">R$ 0</span><span class="card-rotulo">Recebido</span></div>
+          <div class="card"><span class="card-valor" id="fin-pendente">R$ 0</span><span class="card-rotulo">Pendente</span></div>
+          <div class="card"><span class="card-valor" id="fin-inadimplentes">0</span><span class="card-rotulo">Inadimplentes</span></div>
+        </div>
+      </div>
+
+      <div class="painel">
+        <h2>Evolução financeira do ano</h2>
+        <div id="grafico" class="grafico"></div>
+      </div>
+
+      <div class="painel">
+        <div class="painel-titulo">
+          <h2>Pagamentos do mês</h2>
+          <div class="acoes">
+            <button id="btn-mensagem-inadimplentes" class="btn btn-whats">Enviar mensagem aos selecionados</button>
+          </div>
+        </div>
+        <div class="tabela-rolagem">
+          <table class="tabela">
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="check-todos" /></th>
+                <th>Integrante</th><th>Telefone</th><th>Mensalidade</th>
+                <th>Valor pago</th><th>Status</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="tabela-pagamentos"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="painel">
+        <div class="painel-titulo">
+          <h2>Operacional — presença nas giras</h2>
+          <div class="acoes">
+            <select id="filtro-gira"></select>
+          </div>
+        </div>
+        <div class="tabela-rolagem">
+          <table class="tabela">
+            <thead><tr><th>Integrante</th><th>Entidade</th><th>Função</th><th>Atendeu?</th></tr></thead>
+            <tbody id="tabela-presenca"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- Espiritual ---------- -->
+    <section id="view-espiritual" class="view">
+      <div class="colunas">
+        <aside class="painel">
+          <h2>Integrantes</h2>
+          <ul id="lista-espiritual" class="lista"></ul>
+        </aside>
+        <div class="painel painel-largo">
+          <h2 id="espiritual-titulo">Guias e entidades</h2>
+          <p class="dica">Clique em um integrante para ver seus guias.</p>
+          <div class="tabela-rolagem">
+            <table class="tabela">
+              <thead><tr><th>Guia / Entidade</th><th>Linha</th></tr></thead>
+              <tbody id="tabela-entidades"></tbody>
+            </table>
+          </div>
+          <h3>Adicionar guia</h3>
+          <form id="form-entidade" class="form-inline">
+            <input name="nome" placeholder="Nome do guia" required />
+            <select name="tipo" id="entidade-tipo"></select>
+            <button class="btn btn-primario" type="submit">Adicionar</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- Estoque ---------- -->
+    <section id="view-estoque" class="view">
+      <div class="painel" id="painel-alerta-estoque" hidden>
+        <h2>Precisa repor</h2>
+        <p class="dica">Itens que chegaram ao mínimo que você definiu.</p>
+        <ul id="lista-alerta-estoque" class="lista-simples"></ul>
+      </div>
+
+      <div class="painel">
+        <div class="painel-titulo">
+          <h2>Estoque</h2>
+          <div class="acoes">
+            <input type="search" id="filtro-estoque" placeholder="Filtrar por nome" />
+            <button id="btn-adicionar-item" class="btn btn-primario">Adicionar item</button>
+          </div>
+        </div>
+        <p class="dica">A quantidade vale da última conferência. Corrija o número
+          na tabela e clique em Salvar para registrar a contagem.</p>
+        <div class="tabela-rolagem">
+          <table class="tabela">
+            <thead>
+              <tr>
+                <th>Item</th><th>Categoria</th><th>Quantidade</th>
+                <th>Mínimo</th><th>Pela foto</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="tabela-estoque"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ---------- Modal: item de estoque ---------- -->
+  <div id="modal-item" class="modal">
+    <div class="modal-caixa">
+      <h2 id="modal-item-titulo">Adicionar item</h2>
+      <form id="form-item">
+        <label>Nome<input name="nome" required placeholder="Ex.: Vela branca 7 dias" /></label>
+        <label>Categoria<input name="categoria" placeholder="Ex.: Velas, Bebidas, Ervas" /></label>
+        <label>Unidade da contagem<input name="unidade" placeholder="unidade, pacote, garrafa" /></label>
+        <label id="campo-quantidade-inicial">Quantidade atual
+          <input name="quantidade" type="number" step="1" min="0" value="0" /></label>
+        <label>Avisar quando chegar a
+          <input name="minimo_alerta" type="number" step="1" min="0" placeholder="deixe vazio para não avisar" /></label>
+        <label class="linha-marcacao">
+          <input name="contar_por_foto" type="checkbox" checked />
+          <span>A foto consegue contar este item</span>
+        </label>
+        <p class="dica">Desmarque o que a foto não pega — erva, folha, coisa
+          ensacada. Esses itens ficam fora da leitura por imagem e só mudam na mão.</p>
+        <label>Notas<textarea name="notas" rows="2" placeholder="Observações"></textarea></label>
+        <div class="modal-acoes">
+          <button type="button" class="btn" data-fechar>Cancelar</button>
+          <button type="submit" class="btn btn-primario">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ---------- Modal: integrante ---------- -->
+  <div id="modal-integrante" class="modal">
+    <div class="modal-caixa">
+      <h2 id="modal-integrante-titulo">Adicionar integrante</h2>
+      <form id="form-integrante">
+        <label>Nome<input name="nome" required /></label>
+        <label>E-mail<input name="email" type="email" /></label>
+        <label>Telefone (WhatsApp)<input name="telefone" placeholder="(11) 99999-9999" /></label>
+        <label>Função<select name="cargo" id="integrante-cargo"></select></label>
+        <label>Área<select name="area" id="integrante-area"></select></label>
+        <fieldset class="grupo-cargo">
+          <legend>Funções operacionais</legend>
+          <p class="dica">Desmarque o que esta pessoa não pode fazer. O rodízio só
+            sugere — e o sistema só aceita — funções marcadas aqui.</p>
+          <div id="integrante-funcoes" class="funcoes-aptas"></div>
+        </fieldset>
+        <label><input name="admin" type="checkbox" /> Ocupa posição administrativa</label>
+        <label>Notas<textarea name="notas" rows="3" placeholder="Observações ou informações internas"></textarea></label>
+        <label>Mensalidade (R$)<input name="mensalidade" type="number" step="0.01" min="0" value="0" /></label>
+        <div class="modal-acoes">
+          <button type="button" class="btn" data-fechar>Cancelar</button>
+          <button type="submit" class="btn btn-primario">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ---------- Modal: gira ---------- -->
+  <div id="modal-gira" class="modal">
+    <div class="modal-caixa modal-caixa-larga">
+      <h2 id="modal-gira-titulo">Adicionar gira</h2>
+      <form id="form-gira">
+        <label>Data<input name="data" type="date" required /></label>
+        <label>Nome da gira<input name="nome" placeholder="Ex.: Gira de Preto Velho" /></label>
+        <label>Linha<select name="tipo" id="gira-tipo"></select></label>
+        <label>Observações<input name="observacoes" /></label>
+
+        <h3>Funções operacionais</h3>
+        <p class="dica">Sugestão automática pelo rodízio — cada função tem a sua própria fila,
+          e só entram médiuns de rodízio e cambonos. Ajuste se na prática foi outra pessoa.</p>
+        <div id="gira-funcoes" class="funcoes"></div>
+
+        <h3>Quem trabalhou <span class="etiqueta" id="gira-contagem">0 trabalharam</span></h3>
+        <p class="dica">Marque quem trabalhou e escolha a entidade incorporada. Cambono pode
+          trabalhar sem incorporar ou com o próprio guia.</p>
+        <div id="gira-trabalhadores" class="trabalhadores"></div>
+
+        <div class="modal-acoes">
+          <button type="button" class="btn" data-fechar>Cancelar</button>
+          <button type="submit" class="btn btn-primario">Salvar gira</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ---------- Modal: planilha ---------- -->
+  <div id="modal-planilha" class="modal">
+    <div class="modal-caixa">
+      <h2>Gerar planilha da gira</h2>
+      <p class="dica">Gera o arquivo para imprimir e levar ao terreiro: as funções
+        operacionais já vêm sugeridas pelo rodízio e o restante fica em branco para
+        anotar à mão quem trabalhou.</p>
+      <form id="form-planilha">
+        <label>Linha<select name="tipo" id="planilha-tipo"></select></label>
+        <label>Data<input name="data" type="date" required /></label>
+        <div id="planilha-previa" class="previa"></div>
+        <div class="modal-acoes">
+          <button type="button" class="btn" data-fechar>Cancelar</button>
+          <button type="submit" class="btn btn-primario">Baixar planilha</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ---------- Modal: mensagem ---------- -->
+  <div id="modal-mensagem" class="modal">
+    <div class="modal-caixa">
+      <h2>Enviar mensagem via WhatsApp</h2>
+      <p class="dica">Destinatários: <span id="mensagem-destinatarios"></span></p>
+      <p class="dica">Marcadores: <code>{nome}</code>, <code>{primeiro_nome}</code>, <code>{valor}</code></p>
+      <textarea id="mensagem-texto" rows="5"></textarea>
+      <div id="mensagem-links" class="links"></div>
+      <div class="modal-acoes">
+        <button type="button" class="btn" data-fechar>Fechar</button>
+        <button type="button" id="btn-gerar-mensagem" class="btn btn-whats">Gerar links</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="aviso" class="aviso"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

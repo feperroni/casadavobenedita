@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img"
+     aria-label="Símbolo da Casa da Vó Benedita">
+  <!-- Cruzeiro dourado do brasão da casa: cruz cheia com um triângulo vazado
+       sobreposto, como no símbolo pintado no terreiro. -->
+  <path d="M170 24 H230 V100 H302 V166 H230 V320 H170 V166 H98 V100 H170 Z"
+        fill="#ad7c1a"/>
+  <path d="M200 88 L322 320 H78 Z" fill="none" stroke="#ad7c1a"
+        stroke-width="26" stroke-linejoin="round"/>
+
+  <text x="200" y="374" fill="#ad7c1a" text-anchor="middle"
+        font-family="Segoe UI, system-ui, sans-serif" font-size="24"
+        font-weight="700" letter-spacing="1.5">CASA DA VÓ BENEDITA</text>
+</svg>

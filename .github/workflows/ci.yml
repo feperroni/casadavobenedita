@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  tests-and-lint:
+    runs-on: ubuntu-latest
+    env:
+      APP_ENV: development
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pytest black ruff pre-commit
+
+      - name: Lint with ruff
+        run: |
+          ruff check .
+
+      - name: Black check
+        run: |
+          black --check . || (black . && echo "Formatted files with black; please commit the changes" && exit 1)
+
+      - name: Run tests
+        run: |
+          pytest -q
+
+      - name: Secret scan (gitleaks)
+        uses: zricethezav/gitleaks-action@v2
+        with:
+          args: --path=. --redact --exit-code=1

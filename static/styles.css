@@ -1,0 +1,328 @@
+/* Tema Cruzeiro Dourado: o branco e o dourado do cruzeiro no centro do símbolo
+   da casa, com o azul, o rosa e o verde da faixa colorida do brasão nos
+   detalhes e destaques. */
+:root {
+  --fundo: #fdfbf5;
+  --painel: rgba(255, 255, 255, .88);
+  --painel-solido: #ffffff;
+  --painel-claro: #fbf1da;
+  --borda: #e6dcc3;
+  --texto: #2b2620;
+  --texto-fraco: #756b5a;
+  --destaque: #ad7c1a;
+  --azul: #2f7fb8;
+  --rosa: #c2699e;
+  --perigo: #c0392b;
+  --whats: #2e8f5a;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: var(--fundo);
+  color: var(--texto);
+}
+
+/* Marca d'água do símbolo do terreiro, atrás de todo o conteúdo. Os painéis
+   são levemente translúcidos para ela aparecer por baixo. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: url("/static/logo.svg") no-repeat center 46%;
+  background-size: min(620px, 68vmin);
+  opacity: .07;
+  pointer-events: none;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 24px;
+  background: var(--painel);
+  border-bottom: 1px solid var(--borda);
+  flex-wrap: wrap;
+}
+
+.marca { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.marca-simbolo { width: 41px; height: 36px; flex: none; }
+
+.topbar h1 { font-size: 20px; margin: 0; }
+
+/* Com quatro abas as pílulas não cabem numa linha só em tela de celular. */
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.usuario { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--texto-fraco); }
+.usuario .etiqueta { color: var(--texto-fraco); }
+.usuario a { text-decoration: none; }
+
+.tab {
+  background: transparent;
+  color: var(--texto-fraco);
+  border: 1px solid var(--borda);
+  border-radius: 999px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.tab.active, .tab:hover { color: var(--texto); border-color: var(--destaque); }
+
+main { padding: 20px 24px 60px; }
+
+.view { display: none; }
+.view.active { display: block; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.cards-compactos { margin-bottom: 16px; }
+
+.card {
+  background: var(--painel);
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* O card do estoque é um <button> para levar até a aba; herda a aparência dos
+   demais cards em vez de parecer um botão solto no meio deles. */
+.card-acionavel { font: inherit; text-align: left; cursor: pointer; }
+.card-acionavel:hover { border-color: var(--destaque); }
+
+.card-valor { font-size: 26px; font-weight: 700; color: var(--destaque); }
+.card-rotulo { font-size: 12px; color: var(--texto-fraco); text-transform: uppercase; letter-spacing: .5px; }
+
+.colunas { display: grid; grid-template-columns: minmax(240px, 1fr) 2.2fr; gap: 16px; margin-top: 16px; align-items: start; }
+
+/* Item de grid nasce com `min-width: auto`, ou seja, se recusa a encolher
+   abaixo do próprio conteúdo. Sem isto a tabela mais larga estica a coluna e
+   arrasta a página inteira para o lado em telas estreitas. */
+.colunas > * { min-width: 0; }
+
+.painel {
+  background: var(--painel);
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.painel h2 { font-size: 16px; margin: 0 0 10px; }
+.painel h3 { font-size: 14px; margin: 18px 0 8px; color: var(--texto-fraco); }
+.modal-caixa h3 { font-size: 14px; margin: 20px 0 4px; color: var(--destaque); }
+.modal-caixa h3 + .dica { margin-bottom: 10px; }
+
+.painel-titulo { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.btn {
+  background: var(--painel-claro);
+  color: var(--texto);
+  border: 1px solid var(--borda);
+  border-radius: 7px;
+  padding: 7px 13px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.btn:hover { border-color: var(--destaque); }
+.btn-primario { background: var(--destaque); border-color: var(--destaque); color: #fff; font-weight: 600; }
+.btn-perigo { background: var(--perigo); border-color: var(--perigo); color: #fff; }
+.btn-whats { background: var(--whats); border-color: var(--whats); color: #fff; font-weight: 600; }
+
+.lista { list-style: none; margin: 8px 0 0; padding: 0; max-height: 420px; overflow-y: auto; }
+
+.lista li {
+  padding: 9px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.lista li:hover { background: var(--painel-claro); }
+.lista li.selecionado { background: var(--painel-claro); outline: 1px solid var(--destaque); }
+.lista .etiqueta { color: var(--texto-fraco); font-size: 12px; }
+.lista .subtexto { display: block; color: var(--texto-fraco); font-size: 11px; margin-top: 4px; }
+
+/* As tabelas chegam a sete colunas e não cabem num celular de jeito nenhum.
+   Rolam na horizontal dentro do próprio painel, em vez de esticar o body. */
+.tabela-rolagem { overflow-x: auto; }
+
+.tabela { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tabela th, .tabela td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--borda); white-space: nowrap; }
+/* Recados de estado vazio ocupam a linha toda e devem quebrar normalmente. */
+.tabela .dica { white-space: normal; }
+.tabela th { color: var(--texto-fraco); font-size: 12px; text-transform: uppercase; letter-spacing: .4px; }
+.tabela input[type="number"] { width: 100px; }
+
+.tabela select, .tabela input, .form-inline input, .form-inline select,
+.acoes select, .acoes input {
+  background: var(--painel-claro);
+  color: var(--texto);
+  border: 1px solid var(--borda);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+/* Um <select> não encolhe abaixo da opção mais longa, e nome de gira é longo.
+   O `min-width: 0` é que o autoriza a encolher; sem ele o campo estica a barra
+   de ações inteira e estoura o painel nas telas mais estreitas. */
+.acoes, .form-inline { min-width: 0; }
+.acoes select, .acoes input, .form-inline select, .form-inline input { min-width: 0; max-width: 100%; }
+
+.form-inline { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.dica { color: var(--texto-fraco); font-size: 12px; margin: 4px 0 0; }
+
+.tabela .qtd-item { width: 76px; }
+.linha-alerta td { background: rgba(192, 57, 43, .06); }
+.etiqueta-alerta {
+  background: var(--perigo);
+  color: #fff;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+
+/* Checkbox com rótulo ao lado, em vez do rótulo acima como nos campos de texto. */
+.modal-caixa .linha-marcacao {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--texto);
+  margin-bottom: 4px;
+}
+.linha-marcacao input[type="checkbox"] { flex: none; }
+
+/* Doze meses não cabem lado a lado num celular; como nas tabelas, o gráfico
+   rola dentro do painel e cada mês guarda uma largura mínima legível. */
+.grafico { display: flex; align-items: flex-end; gap: 8px; height: 180px; padding-top: 10px; overflow-x: auto; }
+.grafico .barra-wrap { flex: 1; min-width: 30px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 6px; height: 100%; }
+.grafico .barra { width: 100%; background: var(--destaque); border-radius: 4px 4px 0 0; min-height: 2px; }
+.grafico .barra-rotulo { font-size: 11px; color: var(--texto-fraco); }
+.grafico .barra-valor { font-size: 11px; color: var(--texto); }
+
+.modal { display: none; position: fixed; inset: 0; background: rgba(43,38,32,.45); align-items: center; justify-content: center; padding: 20px; z-index: 10; }
+.modal.aberto { display: flex; }
+
+.modal-caixa { background: var(--painel-solido); border: 1px solid var(--borda); border-radius: 12px; padding: 20px; width: min(520px, 100%); max-height: 90vh; overflow-y: auto; box-shadow: 0 18px 50px rgba(43,38,32,.22); }
+.modal-caixa h2 { margin-top: 0; }
+.modal-caixa label { display: block; font-size: 12px; color: var(--texto-fraco); margin-bottom: 10px; }
+
+.modal-caixa input, .modal-caixa select, .modal-caixa textarea {
+  width: 100%;
+  margin-top: 4px;
+  background: var(--painel-claro);
+  color: var(--texto);
+  border: 1px solid var(--borda);
+  border-radius: 7px;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+/* A regra acima é para os campos de texto. Checkbox não tem o que esticar: com
+   `width: 100%` o navegador desenha o quadradinho centralizado numa caixa da
+   largura do modal, longe do rótulo. */
+.modal-caixa input[type="checkbox"] { width: auto; margin-top: 0; }
+
+.modal-acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+
+.modal-caixa-larga { width: min(760px, 100%); }
+
+.trabalhadores { display: flex; flex-direction: column; gap: 12px; }
+.grupo-cargo { border: 1px solid var(--borda); border-radius: 10px; padding: 10px 12px; }
+.grupo-cargo legend { font-size: 12px; color: var(--texto-fraco); padding: 0 6px; }
+
+/* Prefixados com .modal-caixa porque `.modal-caixa label { display: block }`
+   tem especificidade maior e, sem isso, achata a grade em uma coluna só. */
+.modal-caixa .trabalhador {
+  display: grid;
+  grid-template-columns: 20px 1fr minmax(160px, 240px);
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.trabalhador-nome { font-size: 13px; color: var(--texto); }
+.trabalhador select { margin-top: 0; }
+
+.funcoes { display: flex; flex-direction: column; gap: 10px; }
+
+/* Duas colunas dão conta das quatro funções sem esticar o modal. */
+.funcoes-aptas { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 4px 12px; }
+.modal-caixa .funcao-apta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
+  font-size: 13px;
+  color: var(--texto);
+}
+.funcao-apta input[type="checkbox"] { flex: none; }
+
+.modal-caixa .funcao {
+  display: grid;
+  grid-template-columns: 1fr minmax(160px, 240px);
+  align-items: center;
+  gap: 4px 12px;
+  margin-bottom: 0;
+}
+.funcao-nome { font-size: 13px; color: var(--texto); }
+.funcao select { margin-top: 0; }
+.funcao .subtexto {
+  grid-column: 1 / -1;
+  color: var(--texto-fraco);
+  font-size: 11px;
+}
+
+.previa { margin: 10px 0; }
+.lista-simples { list-style: none; margin: 6px 0 0; padding: 0; font-size: 13px; }
+.lista-simples li { padding: 3px 0; color: var(--texto-fraco); }
+.lista-simples strong { color: var(--texto); font-weight: 600; }
+
+.links { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.links a { color: var(--whats); font-size: 13px; }
+.links .erro { color: var(--perigo); font-size: 13px; }
+
+.aviso {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--painel-solido);
+  border: 1px solid var(--destaque);
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  box-shadow: 0 8px 24px rgba(43,38,32,.18);
+  display: none;
+  z-index: 20;
+}
+
+.aviso.visivel { display: block; }
+
+@media (max-width: 900px) {
+  .colunas { grid-template-columns: 1fr; }
+}
+
+/* Abaixo disto o modal já ocupa a tela toda e não sobra largura para o nome e
+   o select lado a lado — o select desce para a própria linha. */
+@media (max-width: 560px) {
+  .modal-caixa .trabalhador { grid-template-columns: 20px 1fr; gap: 4px 10px; }
+  .trabalhador select { grid-column: 2 / -1; }
+  .modal-caixa .funcao { grid-template-columns: 1fr; }
+}
